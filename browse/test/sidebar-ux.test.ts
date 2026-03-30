@@ -940,6 +940,40 @@ describe('chat toolbar buttons disabled state', () => {
   });
 });
 
+// ─── Chat message dedup ─────────────────────────────────────────
+
+describe('chat message dedup (prevents repeat rendering)', () => {
+  const js = fs.readFileSync(path.join(ROOT, '..', 'extension', 'sidepanel.js'), 'utf-8');
+
+  test('renderedEntryIds Set exists for dedup tracking', () => {
+    expect(js).toContain('const renderedEntryIds = new Set()');
+  });
+
+  test('addChatEntry checks entry.id against renderedEntryIds', () => {
+    const addFn = js.slice(
+      js.indexOf('function addChatEntry(entry)'),
+      js.indexOf('\n  // User messages', js.indexOf('function addChatEntry(entry)')),
+    );
+    expect(addFn).toContain('renderedEntryIds.has(entry.id)');
+    expect(addFn).toContain('renderedEntryIds.add(entry.id)');
+    // Should return early (skip) if already rendered
+    expect(addFn).toContain('return');
+  });
+
+  test('addChatEntry skips dedup for entries without id (local notifications)', () => {
+    const addFn = js.slice(
+      js.indexOf('function addChatEntry(entry)'),
+      js.indexOf('\n  // User messages', js.indexOf('function addChatEntry(entry)')),
+    );
+    // Should only check dedup when entry.id is defined
+    expect(addFn).toContain('entry.id !== undefined');
+  });
+
+  test('clear chat resets renderedEntryIds', () => {
+    expect(js).toContain('renderedEntryIds.clear()');
+  });
+});
+
 // ─── LLM-based cleanup architecture ─────────────────────────────
 
 describe('LLM-based cleanup (smart agent cleanup)', () => {
