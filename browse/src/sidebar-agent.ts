@@ -225,9 +225,12 @@ async function askClaude(queueEntry: any): Promise<void> {
   await sendEvent({ type: 'agent_start' }, tid);
 
   return new Promise((resolve) => {
-    // Build args fresh — don't trust --resume from queue (session may be stale)
-    let claudeArgs = ['-p', prompt, '--output-format', 'stream-json', '--verbose',
-      '--allowedTools', 'Bash,Read,Glob,Grep'];
+    // Use args from queue entry (server sets --model, --allowedTools, prompt framing).
+    // Fall back to defaults only if queue entry has no args (backward compat).
+    // Write doesn't expand attack surface beyond what Bash already provides.
+    // The security boundary is the localhost-only message path, not the tool allowlist.
+    let claudeArgs = args || ['-p', prompt, '--output-format', 'stream-json', '--verbose',
+      '--allowedTools', 'Bash,Read,Glob,Grep,Write'];
 
     // Validate cwd exists — queue may reference a stale worktree
     let effectiveCwd = cwd || process.cwd();
@@ -259,20 +262,30 @@ async function askClaude(queueEntry: any): Promise<void> {
       }
     });
 
-    proc.stderr.on('data', () => {}); // Claude logs to stderr, ignore
+    let stderrBuffer = '';
+    proc.stderr.on('data', (data: Buffer) => {
+      stderrBuffer += data.toString();
+    });
 
     proc.on('close', (code) => {
       if (buffer.trim()) {
         try { handleStreamEvent(JSON.parse(buffer), tid); } catch {}
       }
-      sendEvent({ type: 'agent_done' }, tid).then(() => {
+      const doneEvent: Record<string, any> = { type: 'agent_done' };
+      if (code !== 0 && stderrBuffer.trim()) {
+        doneEvent.stderr = stderrBuffer.trim().slice(-500);
+      }
+      sendEvent(doneEvent, tid).then(() => {
         processingTabs.delete(tid);
         resolve();
       });
     });
 
     proc.on('error', (err) => {
-      sendEvent({ type: 'agent_error', error: err.message }, tid).then(() => {
+      const errorMsg = stderrBuffer.trim()
+        ? `${err.message}\nstderr: ${stderrBuffer.trim().slice(-500)}`
+        : err.message;
+      sendEvent({ type: 'agent_error', error: errorMsg }, tid).then(() => {
         processingTabs.delete(tid);
         resolve();
       });
@@ -282,7 +295,10 @@ async function askClaude(queueEntry: any): Promise<void> {
     const timeoutMs = parseInt(process.env.SIDEBAR_AGENT_TIMEOUT || '300000', 10);
     setTimeout(() => {
       try { proc.kill(); } catch {}
-      sendEvent({ type: 'agent_error', error: `Timed out after ${timeoutMs / 1000}s` }, tid).then(() => {
+      const timeoutMsg = stderrBuffer.trim()
+        ? `Timed out after ${timeoutMs / 1000}s\nstderr: ${stderrBuffer.trim().slice(-500)}`
+        : `Timed out after ${timeoutMs / 1000}s`;
+      sendEvent({ type: 'agent_error', error: timeoutMsg }, tid).then(() => {
         processingTabs.delete(tid);
         resolve();
       });
