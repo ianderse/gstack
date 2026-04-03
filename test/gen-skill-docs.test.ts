@@ -1979,6 +1979,35 @@ describe('setup script validation', () => {
     expect(fnBody).toContain('ln -snf "$gstack_dir/$dir_name/SKILL.md" "$target/SKILL.md"');
   });
 
+  // REGRESSION: cleanup functions must handle both old symlinks AND new real-directory pattern
+  test('cleanup functions handle real directories with symlinked SKILL.md', () => {
+    // cleanup_old_claude_symlinks must detect and remove real dirs with SKILL.md symlinks
+    const cleanupOldStart = setupContent.indexOf('cleanup_old_claude_symlinks()');
+    const cleanupOldEnd = setupContent.indexOf('}', setupContent.indexOf('cleaned up old', cleanupOldStart));
+    const cleanupOldBody = setupContent.slice(cleanupOldStart, cleanupOldEnd);
+    expect(cleanupOldBody).toContain('-d "$old_target"');
+    expect(cleanupOldBody).toContain('-L "$old_target/SKILL.md"');
+    expect(cleanupOldBody).toContain('rm -rf "$old_target"');
+
+    // cleanup_prefixed_claude_symlinks must also handle the new pattern
+    const cleanupPrefixedStart = setupContent.indexOf('cleanup_prefixed_claude_symlinks()');
+    const cleanupPrefixedEnd = setupContent.indexOf('}', setupContent.indexOf('cleaned up prefixed', cleanupPrefixedStart));
+    const cleanupPrefixedBody = setupContent.slice(cleanupPrefixedStart, cleanupPrefixedEnd);
+    expect(cleanupPrefixedBody).toContain('-d "$prefixed_target"');
+    expect(cleanupPrefixedBody).toContain('-L "$prefixed_target/SKILL.md"');
+    expect(cleanupPrefixedBody).toContain('rm -rf "$prefixed_target"');
+  });
+
+  // REGRESSION: link function must upgrade old directory symlinks
+  test('link_claude_skill_dirs removes old directory symlinks before creating real dirs', () => {
+    const fnStart = setupContent.indexOf('link_claude_skill_dirs()');
+    const fnEnd = setupContent.indexOf('}', setupContent.indexOf('linked[@]}', fnStart));
+    const fnBody = setupContent.slice(fnStart, fnEnd);
+    // Must check for and remove old symlinks before mkdir
+    expect(fnBody).toContain('if [ -L "$target" ]');
+    expect(fnBody).toContain('rm -f "$target"');
+  });
+
   test('setup supports --host auto|claude|codex|kiro', () => {
     expect(setupContent).toContain('--host');
     expect(setupContent).toContain('claude|codex|kiro|factory|auto');

@@ -97,6 +97,71 @@ describe('gstack-relink (#578)', () => {
     expect(output).toContain('flat');
   });
 
+  // REGRESSION: unprefixed skills must be real directories, not symlinks (#761)
+  // Claude Code auto-prefixes skills nested under a parent dir symlink.
+  // e.g., `qa -> gstack/qa` gets discovered as "gstack-qa", not "qa".
+  // The fix: create real directories with SKILL.md symlinks inside.
+  test('unprefixed skills are real directories with SKILL.md symlinks, not dir symlinks', () => {
+    setupMockInstall(['qa', 'ship', 'review', 'plan-ceo-review']);
+    run(`${path.join(installDir, 'bin', 'gstack-config')} set skill_prefix false`);
+    run(`${path.join(installDir, 'bin', 'gstack-relink')}`, {
+      GSTACK_INSTALL_DIR: installDir,
+      GSTACK_SKILLS_DIR: skillsDir,
+    });
+    for (const skill of ['qa', 'ship', 'review', 'plan-ceo-review']) {
+      const skillPath = path.join(skillsDir, skill);
+      const skillMdPath = path.join(skillPath, 'SKILL.md');
+      // Must be a real directory, NOT a symlink
+      expect(fs.lstatSync(skillPath).isDirectory()).toBe(true);
+      expect(fs.lstatSync(skillPath).isSymbolicLink()).toBe(false);
+      // Must contain a SKILL.md that IS a symlink
+      expect(fs.existsSync(skillMdPath)).toBe(true);
+      expect(fs.lstatSync(skillMdPath).isSymbolicLink()).toBe(true);
+      // The SKILL.md symlink must point to the source skill's SKILL.md
+      const target = fs.readlinkSync(skillMdPath);
+      expect(target).toContain(skill);
+      expect(target).toEndWith('/SKILL.md');
+    }
+  });
+
+  // Same invariant for prefixed mode
+  test('prefixed skills are real directories with SKILL.md symlinks, not dir symlinks', () => {
+    setupMockInstall(['qa', 'ship']);
+    run(`${path.join(installDir, 'bin', 'gstack-config')} set skill_prefix true`);
+    run(`${path.join(installDir, 'bin', 'gstack-relink')}`, {
+      GSTACK_INSTALL_DIR: installDir,
+      GSTACK_SKILLS_DIR: skillsDir,
+    });
+    for (const skill of ['gstack-qa', 'gstack-ship']) {
+      const skillPath = path.join(skillsDir, skill);
+      const skillMdPath = path.join(skillPath, 'SKILL.md');
+      expect(fs.lstatSync(skillPath).isDirectory()).toBe(true);
+      expect(fs.lstatSync(skillPath).isSymbolicLink()).toBe(false);
+      expect(fs.lstatSync(skillMdPath).isSymbolicLink()).toBe(true);
+    }
+  });
+
+  // Upgrade: old directory symlinks get replaced with real directories
+  test('upgrades old directory symlinks to real directories', () => {
+    setupMockInstall(['qa', 'ship']);
+    // Simulate old behavior: create directory symlinks (the old pattern)
+    fs.symlinkSync(path.join(installDir, 'qa'), path.join(skillsDir, 'qa'));
+    fs.symlinkSync(path.join(installDir, 'ship'), path.join(skillsDir, 'ship'));
+    // Verify they start as symlinks
+    expect(fs.lstatSync(path.join(skillsDir, 'qa')).isSymbolicLink()).toBe(true);
+
+    run(`${path.join(installDir, 'bin', 'gstack-config')} set skill_prefix false`);
+    run(`${path.join(installDir, 'bin', 'gstack-relink')}`, {
+      GSTACK_INSTALL_DIR: installDir,
+      GSTACK_SKILLS_DIR: skillsDir,
+    });
+
+    // After relink: must be real directories, not symlinks
+    expect(fs.lstatSync(path.join(skillsDir, 'qa')).isSymbolicLink()).toBe(false);
+    expect(fs.lstatSync(path.join(skillsDir, 'qa')).isDirectory()).toBe(true);
+    expect(fs.lstatSync(path.join(skillsDir, 'qa', 'SKILL.md')).isSymbolicLink()).toBe(true);
+  });
+
   // Test 13: cleans stale symlinks from opposite mode
   test('cleans up stale symlinks from opposite mode', () => {
     setupMockInstall(['qa', 'ship']);
