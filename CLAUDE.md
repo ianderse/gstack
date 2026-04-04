@@ -168,6 +168,14 @@ When you need to interact with a browser (QA, dogfooding, cookie setup), use the
 `mcp__claude-in-chrome__*` tools — they are slow, unreliable, and not what this
 project uses.
 
+**Sidebar architecture:** Before modifying `sidepanel.js`, `background.js`,
+`content.js`, `sidebar-agent.ts`, or sidebar-related server endpoints, read
+`docs/designs/SIDEBAR_MESSAGE_FLOW.md`. It documents the full initialization
+timeline, message flow, auth token chain, tab concurrency model, and known
+failure modes. The sidebar spans 5 files across 2 codebases (extension + server)
+with non-obvious ordering dependencies. The doc exists to prevent the kind of
+silent failures that come from not understanding the cross-component flow.
+
 ## Vendored symlink awareness
 
 When developing gstack, `.claude/skills/gstack` may be a symlink back to this
