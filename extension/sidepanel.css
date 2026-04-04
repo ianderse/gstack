@@ -290,6 +290,32 @@ body::after {
   line-height: 1.5;
   word-break: break-word;
 }
+/* Collapsed reasoning disclosure */
+.agent-reasoning {
+  margin: 4px 0;
+}
+.agent-reasoning summary {
+  cursor: pointer;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-meta);
+  padding: 3px 0;
+  user-select: none;
+  list-style: none;
+}
+.agent-reasoning summary::before {
+  content: '▶ ';
+  font-size: 9px;
+}
+.agent-reasoning[open] summary::before {
+  content: '▼ ';
+}
+.agent-reasoning summary:hover {
+  color: var(--text-label);
+}
+.agent-reasoning .agent-tool {
+  margin-left: 4px;
+}
 /* Legacy classes kept for compat */
 .tool-name {
   color: var(--amber-500);

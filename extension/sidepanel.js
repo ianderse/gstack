@@ -196,8 +196,27 @@ function handleAgentEvent(entry) {
     if (thinking) thinking.remove();
     updateStopButton(false);
     stopFastPoll();
-    // Add timestamp
+    // Collapse tool calls into a "See reasoning" disclosure
     if (agentContainer) {
+      const tools = agentContainer.querySelectorAll('.agent-tool');
+      if (tools.length > 0) {
+        const details = document.createElement('details');
+        details.className = 'agent-reasoning';
+        const summary = document.createElement('summary');
+        summary.textContent = `See reasoning (${tools.length} step${tools.length > 1 ? 's' : ''})`;
+        details.appendChild(summary);
+        for (const tool of tools) {
+          details.appendChild(tool);
+        }
+        // Insert the disclosure before the text response (if any)
+        const textEl = agentContainer.querySelector('.agent-text');
+        if (textEl) {
+          agentContainer.insertBefore(details, textEl);
+        } else {
+          agentContainer.appendChild(details);
+        }
+      }
+      // Add timestamp
       const ts = document.createElement('span');
       ts.className = 'chat-time';
       ts.textContent = formatChatTime(entry.ts);
