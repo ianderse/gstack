@@ -282,6 +282,10 @@ function loadSession(): SidebarSession | null {
   try {
     const activeFile = path.join(SESSIONS_DIR, 'active.json');
     const activeData = JSON.parse(fs.readFileSync(activeFile, 'utf-8'));
+    if (typeof activeData.id !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(activeData.id)) {
+      console.warn('[browse] Invalid session ID in active.json — ignoring');
+      return null;
+    }
     const sessionFile = path.join(SESSIONS_DIR, activeData.id, 'session.json');
     const session = JSON.parse(fs.readFileSync(sessionFile, 'utf-8')) as SidebarSession;
     // Validate worktree still exists — crash may have left stale path
@@ -560,6 +564,7 @@ function spawnClaude(userMessage: string, extensionUrl?: string | null, forTabId
   try {
     fs.mkdirSync(gstackDir, { recursive: true, mode: 0o700 });
     fs.appendFileSync(agentQueue, entry + '\n');
+    try { fs.chmodSync(agentQueue, 0o600); } catch {}
   } catch (err: any) {
     addChatEntry({ ts: new Date().toISOString(), role: 'agent', type: 'agent_error', error: `Failed to queue: ${err.message}` });
     agentStatus = 'idle';
@@ -1117,7 +1122,6 @@ async function start() {
           mode: browserManager.getConnectionMode(),
           uptime: Math.floor((Date.now() - startTime) / 1000),
           tabs: browserManager.getTabCount(),
-          currentUrl: browserManager.getCurrentUrl(),
           // Auth token for extension bootstrap. Safe: /health is localhost-only.
           // Previously served unconditionally, but that leaks the token if the
           // server is tunneled to the internet (ngrok, SSH tunnel).
@@ -1130,7 +1134,6 @@ async function start() {
           agent: {
             status: agentStatus,
             runningFor: agentStartTime ? Date.now() - agentStartTime : null,
-            currentMessage,
             queueLength: messageQueue.length,
           },
           session: sidebarSession ? { id: sidebarSession.id, name: sidebarSession.name } : null,
@@ -1251,9 +1254,10 @@ async function start() {
         }
         try {
           // Sync active tab from Chrome extension — detects manual tab switches
-          const activeUrl = url.searchParams.get('activeUrl');
-          if (activeUrl) {
-            browserManager.syncActiveTabByUrl(activeUrl);
+          const rawActiveUrl = url.searchParams.get('activeUrl');
+          const sanitizedActiveUrl = sanitizeExtensionUrl(rawActiveUrl);
+          if (sanitizedActiveUrl) {
+            browserManager.syncActiveTabByUrl(sanitizedActiveUrl);
           }
           const tabs = await browserManager.getTabListWithTitles();
           return new Response(JSON.stringify({ tabs }), {
@@ -1322,11 +1326,12 @@ async function start() {
         // The Chrome extension sends the active tab's URL — prefer it over
         // Playwright's page.url() which can be stale in headed mode when
         // the user navigates manually.
-        const extensionUrl = body.activeTabUrl || null;
+        const rawExtensionUrl = body.activeTabUrl || null;
+        const sanitizedExtUrl = sanitizeExtensionUrl(rawExtensionUrl);
         // Sync active tab BEFORE reading the ID — the user may have switched
         // tabs manually and the server's activeTabId is stale.
-        if (extensionUrl) {
-          browserManager.syncActiveTabByUrl(extensionUrl);
+        if (sanitizedExtUrl) {
+          browserManager.syncActiveTabByUrl(sanitizedExtUrl);
         }
         const msgTabId = browserManager?.getActiveTabId?.() ?? 0;
         const ts = new Date().toISOString();
@@ -1336,12 +1341,12 @@ async function start() {
         // Per-tab agent: each tab can run its own agent concurrently
         const tabState = getTabAgent(msgTabId);
         if (tabState.status === 'idle') {
-          spawnClaude(msg, extensionUrl, msgTabId);
+          spawnClaude(msg, sanitizedExtUrl, msgTabId);
           return new Response(JSON.stringify({ ok: true, processing: true }), {
             status: 200, headers: { 'Content-Type': 'application/json' },
           });
         } else if (tabState.queue.length < MAX_QUEUE) {
-          tabState.queue.push({ message: msg, ts, extensionUrl });
+          tabState.queue.push({ message: msg, ts, extensionUrl: sanitizedExtUrl });
           return new Response(JSON.stringify({ ok: true, queued: true, position: tabState.queue.length }), {
             status: 200, headers: { 'Content-Type': 'application/json' },
           });
