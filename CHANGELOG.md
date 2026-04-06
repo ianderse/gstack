@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.15.14.0] - 2026-04-06 — Batch Commands: 20x Faster Remote Browsing
+
+Remote agents controlling your browser through a tunnel used to pay 2-5 seconds of latency per command. A 20-tab crawl meant 160 round-trips and ~8 minutes of waiting. The new `POST /batch` endpoint collapses N commands into a single HTTP round-trip — that same crawl now takes ~5 seconds.
+
+### Added
+
+- **`POST /batch` endpoint.** Send up to 50 commands in a single HTTP request, get all results back in one response. Each command can target a different tab via `tabId`. Sequential execution through the full security pipeline (scope, domain, tab ownership, content wrapping). Rate limiting counts the batch as 1 request.
+- **8 source-level security tests** for the batch endpoint covering auth gate placement, scoped token support, command limit, nested batch rejection, rate limiting, activity events, field validation, and tabId passthrough.
+
+### Changed
+
+- Hermes consolidated into the generic HTTP option in `/pair-agent` (was a separate menu choice with identical behavior).
+
 ## [0.15.13.0] - 2026-04-04 — Team Mode
 
 Teams can now keep every developer on the same gstack version automatically. No more vendoring 342 files into your repo. No more version drift across branches. No more "who upgraded gstack last?" Slack threads. One command, every developer is current.
