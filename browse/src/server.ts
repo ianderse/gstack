@@ -823,13 +823,15 @@ async function handleCommand(body: any): Promise<Response> {
   try {
     let result: string;
 
+    const session = browserManager.getActiveSession();
+
     if (READ_COMMANDS.has(command)) {
-      result = await handleReadCommand(command, args, browserManager);
+      result = await handleReadCommand(command, args, session);
       if (PAGE_CONTENT_COMMANDS.has(command)) {
         result = wrapUntrustedContent(result, browserManager.getCurrentUrl());
       }
     } else if (WRITE_COMMANDS.has(command)) {
-      result = await handleWriteCommand(command, args, browserManager);
+      result = await handleWriteCommand(command, args, session, browserManager);
     } else if (META_COMMANDS.has(command)) {
       result = await handleMetaCommand(command, args, browserManager, shutdown);
       // Start periodic snapshot interval when watch mode begins
@@ -840,7 +842,7 @@ async function handleCommand(body: any): Promise<Response> {
             return;
           }
           try {
-            const snapshot = await handleSnapshot(['-i'], browserManager);
+            const snapshot = await handleSnapshot(['-i'], browserManager.getActiveSession());
             browserManager.addWatchSnapshot(snapshot);
           } catch {
             // Page may be navigating — skip this snapshot

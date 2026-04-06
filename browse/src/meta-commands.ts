@@ -50,6 +50,9 @@ export async function handleMetaCommand(
   bm: BrowserManager,
   shutdown: () => Promise<void> | void
 ): Promise<string> {
+  // Per-tab operations use the active session; global operations use bm directly
+  const session = bm.getActiveSession();
+
   switch (command) {
     // ─── Tabs ──────────────────────────────────────────
     case 'tabs': {
@@ -80,7 +83,7 @@ export async function handleMetaCommand(
 
     // ─── Server Control ────────────────────────────────
     case 'status': {
-      const page = bm.getPage();
+      const page = session.getPage();
       const tabs = bm.getTabCount();
       const mode = bm.getConnectionMode();
       return [
@@ -111,7 +114,7 @@ export async function handleMetaCommand(
     // ─── Visual ────────────────────────────────────────
     case 'screenshot': {
       // Parse priority: flags (--viewport, --clip) → selector (@ref, CSS) → output path
-      const page = bm.getPage();
+      const page = session.getPage();
       let outputPath = `${TEMP_DIR}/browse-screenshot.png`;
       let clipRect: { x: number; y: number; width: number; height: number } | undefined;
       let targetSelector: string | undefined;
@@ -158,7 +161,7 @@ export async function handleMetaCommand(
       }
 
       if (targetSelector) {
-        const resolved = await bm.resolveRef(targetSelector);
+        const resolved = await session.resolveRef(targetSelector);
         const locator = 'locator' in resolved ? resolved.locator : page.locator(resolved.selector);
         await locator.screenshot({ path: outputPath, timeout: 5000 });
         return `Screenshot saved (element): ${outputPath}`;
@@ -174,7 +177,7 @@ export async function handleMetaCommand(
     }
 
     case 'pdf': {
-      const page = bm.getPage();
+      const page = session.getPage();
       const pdfPath = args[0] || `${TEMP_DIR}/browse-page.pdf`;
       validateOutputPath(pdfPath);
       await page.pdf({ path: pdfPath, format: 'A4' });
@@ -182,7 +185,7 @@ export async function handleMetaCommand(
     }
 
     case 'responsive': {
-      const page = bm.getPage();
+      const page = session.getPage();
       const prefix = args[0] || `${TEMP_DIR}/browse-responsive`;
       validateOutputPath(prefix);
       const viewports = [
@@ -238,10 +241,10 @@ export async function handleMetaCommand(
         try {
           let result: string;
           if (WRITE_COMMANDS.has(name)) {
-            result = await handleWriteCommand(name, cmdArgs, bm);
+            result = await handleWriteCommand(name, cmdArgs, session, bm);
             lastWasWrite = true;
           } else if (READ_COMMANDS.has(name)) {
-            result = await handleReadCommand(name, cmdArgs, bm);
+            result = await handleReadCommand(name, cmdArgs, session);
             if (PAGE_CONTENT_COMMANDS.has(name)) {
               result = wrapUntrustedContent(result, bm.getCurrentUrl());
             }
@@ -260,7 +263,7 @@ export async function handleMetaCommand(
 
       // Wait for network to settle after write commands before returning
       if (lastWasWrite) {
-        await bm.getPage().waitForLoadState('networkidle', { timeout: 2000 }).catch(() => {});
+        await session.getPage().waitForLoadState('networkidle', { timeout: 2000 }).catch(() => {});
       }
 
       return results.join('\n\n');
@@ -271,7 +274,7 @@ export async function handleMetaCommand(
       const [url1, url2] = args;
       if (!url1 || !url2) throw new Error('Usage: browse diff <url1> <url2>');
 
-      const page = bm.getPage();
+      const page = session.getPage();
       await validateNavigationUrl(url1);
       await page.goto(url1, { waitUntil: 'domcontentloaded', timeout: 15000 });
       const text1 = await getCleanText(page);
@@ -296,7 +299,7 @@ export async function handleMetaCommand(
 
     // ─── Snapshot ─────────────────────────────────────
     case 'snapshot': {
-      const snapshotResult = await handleSnapshot(args, bm);
+      const snapshotResult = await handleSnapshot(args, session);
       return wrapUntrustedContent(snapshotResult, bm.getCurrentUrl());
     }
 
@@ -309,7 +312,7 @@ export async function handleMetaCommand(
     case 'resume': {
       bm.resume();
       // Re-snapshot to capture current page state after human interaction
-      const snapshot = await handleSnapshot(['-i'], bm);
+      const snapshot = await handleSnapshot(['-i'], session);
       return `RESUMED\n${wrapUntrustedContent(snapshot, bm.getCurrentUrl())}`;
     }
 
@@ -359,7 +362,7 @@ export async function handleMetaCommand(
         // If a ref was passed, scroll it into view
         if (args.length > 0 && args[0].startsWith('@')) {
           try {
-            const resolved = await bm.resolveRef(args[0]);
+            const resolved = await session.resolveRef(args[0]);
             if ('locator' in resolved) {
               await resolved.locator.scrollIntoViewIfNeeded({ timeout: 5000 });
               return `Browser activated. Scrolled ${args[0]} into view.`;
@@ -504,7 +507,7 @@ export async function handleMetaCommand(
           }
         }
         // Close existing pages, then restore (replace, not merge)
-        bm.setFrame(null);
+        session.setFrame(null);
         await bm.closeAllPages();
         await bm.restoreState({
           cookies: data.cookies,
@@ -522,12 +525,12 @@ export async function handleMetaCommand(
       if (!target) throw new Error('Usage: frame <selector|@ref|--name name|--url pattern|main>');
 
       if (target === 'main') {
-        bm.setFrame(null);
-        bm.clearRefs();
+        session.setFrame(null);
+        session.clearRefs();
         return 'Switched to main frame';
       }
 
-      const page = bm.getPage();
+      const page = session.getPage();
       let frame: Frame | null = null;
 
       if (target === '--name') {
@@ -538,7 +541,7 @@ export async function handleMetaCommand(
         frame = page.frame({ url: new RegExp(args[1]) });
       } else {
         // CSS selector or @ref for the iframe element
-        const resolved = await bm.resolveRef(target);
+        const resolved = await session.resolveRef(target);
         const locator = 'locator' in resolved ? resolved.locator : page.locator(resolved.selector);
         const elementHandle = await locator.elementHandle({ timeout: 5000 });
         frame = await elementHandle?.contentFrame() ?? null;
@@ -546,8 +549,8 @@ export async function handleMetaCommand(
       }
 
       if (!frame) throw new Error(`Frame not found: ${target}`);
-      bm.setFrame(frame);
-      bm.clearRefs();
+      session.setFrame(frame);
+      session.clearRefs();
       return `Switched to frame: ${frame.url()}`;
     }
 
