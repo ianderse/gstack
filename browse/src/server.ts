@@ -764,14 +764,18 @@ if (BROWSE_PARENT_PID > 0) {
     try {
       process.kill(BROWSE_PARENT_PID, 0); // signal 0 = existence check only, no signal sent
     } catch {
-      // Parent exited. Behavior depends on mode:
-      // - Normal (headless) mode: stay alive. Claude Code's Bash tool kills the
-      //   parent shell between invocations, so the server must survive. The
-      //   idle timeout (30 min) handles eventual cleanup.
-      // - Headed / tunnel mode: the idle timeout DOESN'T apply (see idleCheckInterval
-      //   above — both modes early-return). If we ignored parent death here too,
-      //   orphan daemons would accumulate forever after /pair-agent or
-      //   /open-gstack-browser sessions end. Shutdown instead.
+      // Parent exited. Resolution order:
+      // 1. Active cookie picker (one-time code or session live)? Stay alive
+      //    regardless of mode — tearing down the server mid-import leaves the
+      //    picker UI with a stale "Failed to fetch" error.
+      // 2. Headed / tunnel mode? Shutdown. The idle timeout doesn't apply in
+      //    these modes (see idleCheckInterval above — both early-return), so
+      //    ignoring parent death here would leak orphan daemons after
+      //    /pair-agent or /open-gstack-browser sessions.
+      // 3. Normal (headless) mode? Stay alive. Claude Code's Bash tool kills
+      //    the parent shell between invocations. The idle timeout (30 min)
+      //    handles eventual cleanup.
+      if (hasActivePicker()) return;
       const headed = browserManager.getConnectionMode() === 'headed';
       if (headed || tunnelActive) {
         console.log(`[browse] Parent process ${BROWSE_PARENT_PID} exited in ${headed ? 'headed' : 'tunnel'} mode, shutting down`);
@@ -785,6 +789,7 @@ if (BROWSE_PARENT_PID > 0) {
 }
 
 // ─── Command Sets (from commands.ts — single source of truth) ───
+import { hasActivePicker } from './cookie-picker-routes';
 import { READ_COMMANDS, WRITE_COMMANDS, META_COMMANDS } from './commands';
 export { READ_COMMANDS, WRITE_COMMANDS, META_COMMANDS };
 
@@ -1250,6 +1255,10 @@ process.on('SIGINT', shutdown);
 //   SIGTERM so external tooling (systemd, supervisord, CI) can shut cleanly
 //   without waiting forever. Ctrl+C and /stop still work either way.
 process.on('SIGTERM', () => {
+  if (hasActivePicker()) {
+    console.log('[browse] Received SIGTERM but cookie picker is active, ignoring to avoid stranding the picker UI');
+    return;
+  }
   const headed = browserManager.getConnectionMode() === 'headed';
   if (headed || tunnelActive) {
     console.log(`[browse] Received SIGTERM in ${headed ? 'headed' : 'tunnel'} mode, shutting down`);
