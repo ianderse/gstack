@@ -8,6 +8,10 @@ description: |
   "show learnings", "prune stale learnings", or "export learnings".
   Proactively suggest when the user asks about past patterns or wonders
   "didn't we fix this before?"
+triggers:
+  - show learnings
+  - what have we learned
+  - manage project learnings
 allowed-tools:
   - Bash
   - Read
@@ -258,6 +262,8 @@ AI orchestrator (e.g., OpenClaw). In spawned sessions:
 - Do NOT run upgrade checks, telemetry prompts, routing injection, or lake intro.
 - Focus on completing the task and reporting results via prose output.
 - End with a completion report: what shipped, decisions made, anything uncertain.
+
+
 
 ## Voice
 

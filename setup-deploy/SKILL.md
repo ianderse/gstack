@@ -9,6 +9,10 @@ description: |
   the configuration to CLAUDE.md so all future deploys are automatic.
   Use when: "setup deploy", "configure deployment", "set up land-and-deploy",
   "how do I deploy with gstack", "add deploy config".
+triggers:
+  - configure deploy
+  - setup deployment
+  - set deploy platform
 allowed-tools:
   - Bash
   - Read
@@ -259,6 +263,8 @@ AI orchestrator (e.g., OpenClaw). In spawned sessions:
 - Do NOT run upgrade checks, telemetry prompts, routing injection, or lake intro.
 - Focus on completing the task and reporting results via prose output.
 - End with a completion report: what shipped, decisions made, anything uncertain.
+
+
 
 ## Voice
 

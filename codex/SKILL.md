@@ -9,6 +9,10 @@ description: |
   The "200 IQ autistic developer" second opinion. Use when asked to "codex review",
   "codex challenge", "ask codex", "second opinion", or "consult codex". (gstack)
   Voice triggers (speech-to-text aliases): "code x", "code ex", "get another opinion".
+triggers:
+  - codex review
+  - second opinion
+  - outside voice challenge
 allowed-tools:
   - Bash
   - Read
@@ -258,6 +262,8 @@ AI orchestrator (e.g., OpenClaw). In spawned sessions:
 - Do NOT run upgrade checks, telemetry prompts, routing injection, or lake intro.
 - Focus on completing the task and reporting results via prose output.
 - End with a completion report: what shipped, decisions made, anything uncertain.
+
+
 
 ## Voice
 

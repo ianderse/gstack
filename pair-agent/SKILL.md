@@ -9,6 +9,10 @@ description: |
   Use when asked to "pair agent", "connect agent", "share browser", "remote browser",
   "let another agent use my browser", or "give browser access". (gstack)
   Voice triggers (speech-to-text aliases): "pair agent", "connect agent", "share my browser", "remote browser access".
+triggers:
+  - pair with agent
+  - connect remote agent
+  - share my browser
 allowed-tools:
   - Bash
   - Read
@@ -256,6 +260,8 @@ AI orchestrator (e.g., OpenClaw). In spawned sessions:
 - Do NOT run upgrade checks, telemetry prompts, routing injection, or lake intro.
 - Focus on completing the task and reporting results via prose output.
 - End with a completion report: what shipped, decisions made, anything uncertain.
+
+
 
 ## Voice
 

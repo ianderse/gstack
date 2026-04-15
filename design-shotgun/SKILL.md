@@ -9,6 +9,10 @@ description: |
   "visual brainstorm", or "I don't like how this looks".
   Proactively suggest when the user describes a UI feature but hasn't seen
   what it could look like. (gstack)
+triggers:
+  - explore design variants
+  - show me design options
+  - visual design brainstorm
 allowed-tools:
   - Bash
   - Read
@@ -258,6 +262,8 @@ AI orchestrator (e.g., OpenClaw). In spawned sessions:
 - Do NOT run upgrade checks, telemetry prompts, routing injection, or lake intro.
 - Focus on completing the task and reporting results via prose output.
 - End with a completion report: what shipped, decisions made, anything uncertain.
+
+
 
 ## Voice
 

@@ -19,6 +19,12 @@ allowed-tools:
   - Glob
   - AskUserQuestion
   - WebSearch
+triggers:
+  - debug this
+  - fix this bug
+  - why is this broken
+  - root cause analysis
+  - investigate this error
 hooks:
   PreToolUse:
     - matcher: "Edit"
@@ -273,6 +279,8 @@ AI orchestrator (e.g., OpenClaw). In spawned sessions:
 - Do NOT run upgrade checks, telemetry prompts, routing injection, or lake intro.
 - Focus on completing the task and reporting results via prose output.
 - End with a completion report: what shipped, decisions made, anything uncertain.
+
+
 
 ## Voice
 

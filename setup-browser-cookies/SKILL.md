@@ -7,6 +7,10 @@ description: |
   Opens an interactive picker UI where you select which cookie domains to import.
   Use before QA testing authenticated pages. Use when asked to "import cookies",
   "login to the site", or "authenticate the browser". (gstack)
+triggers:
+  - import browser cookies
+  - login to test site
+  - setup authenticated session
 allowed-tools:
   - Bash
   - Read
@@ -253,6 +257,8 @@ AI orchestrator (e.g., OpenClaw). In spawned sessions:
 - Do NOT run upgrade checks, telemetry prompts, routing injection, or lake intro.
 - Focus on completing the task and reporting results via prose output.
 - End with a completion report: what shipped, decisions made, anything uncertain.
+
+
 
 ## Voice
 

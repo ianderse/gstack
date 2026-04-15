@@ -21,6 +21,10 @@ allowed-tools:
   - Bash
   - AskUserQuestion
   - WebSearch
+triggers:
+  - developer experience review
+  - dx plan review
+  - check developer onboarding
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->
@@ -263,6 +267,8 @@ AI orchestrator (e.g., OpenClaw). In spawned sessions:
 - Do NOT run upgrade checks, telemetry prompts, routing injection, or lake intro.
 - Focus on completing the task and reporting results via prose output.
 - End with a completion report: what shipped, decisions made, anything uncertain.
+
+
 
 ## Voice
 

@@ -8,6 +8,10 @@ description: |
   Use when asked to "open gstack browser", "launch browser", "connect chrome",
   "open chrome", "real browser", "launch chrome", "side panel", or "control my browser".
   Voice triggers (speech-to-text aliases): "show me the browser".
+triggers:
+  - open gstack browser
+  - launch chromium
+  - show me the browser
 allowed-tools:
   - Bash
   - Read
@@ -255,6 +259,8 @@ AI orchestrator (e.g., OpenClaw). In spawned sessions:
 - Do NOT run upgrade checks, telemetry prompts, routing injection, or lake intro.
 - Focus on completing the task and reporting results via prose output.
 - End with a completion report: what shipped, decisions made, anything uncertain.
+
+
 
 ## Voice
 

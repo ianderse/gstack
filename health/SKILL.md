@@ -8,6 +8,10 @@ description: |
   0-10 score, and tracks trends over time. Use when: "health check",
   "code quality", "how healthy is the codebase", "run all checks",
   "quality score". (gstack)
+triggers:
+  - code health check
+  - quality dashboard
+  - how healthy is codebase
 allowed-tools:
   - Bash
   - Read
@@ -258,6 +262,8 @@ AI orchestrator (e.g., OpenClaw). In spawned sessions:
 - Do NOT run upgrade checks, telemetry prompts, routing injection, or lake intro.
 - Focus on completing the task and reporting results via prose output.
 - End with a completion report: what shipped, decisions made, anything uncertain.
+
+
 
 ## Voice
 

@@ -12,6 +12,10 @@ description: |
   "build me a page", "implement this design", or after any planning skill.
   Proactively suggest when user has approved a design or has a plan ready. (gstack)
   Voice triggers (speech-to-text aliases): "build the design", "code the mockup", "make it real".
+triggers:
+  - build the design
+  - code the mockup
+  - make design real
 allowed-tools:
   - Bash
   - Read
@@ -263,6 +267,8 @@ AI orchestrator (e.g., OpenClaw). In spawned sessions:
 - Do NOT run upgrade checks, telemetry prompts, routing injection, or lake intro.
 - Focus on completing the task and reporting results via prose output.
 - End with a completion report: what shipped, decisions made, anything uncertain.
+
+
 
 ## Voice
 
