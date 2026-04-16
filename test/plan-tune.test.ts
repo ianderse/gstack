@@ -21,6 +21,12 @@ import {
   getRegistryStats,
   type QuestionDef,
 } from '../scripts/question-registry';
+import {
+  classifyQuestion,
+  isOneWayDoor,
+  DESTRUCTIVE_PATTERN_LIST,
+  ONE_WAY_SKILL_CATEGORY_SET,
+} from '../scripts/one-way-doors';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -250,6 +256,74 @@ describe('AskUserQuestion template coverage (informational)', () => {
   test('registry covers >= 10 skills from template files', () => {
     const stats = getRegistryStats();
     expect(Object.keys(stats.by_skill).length).toBeGreaterThanOrEqual(10);
+  });
+});
+
+// -----------------------------------------------------------------------
+// One-way door classifier (belt-and-suspenders keyword fallback)
+// -----------------------------------------------------------------------
+
+describe('one-way-doors classifier', () => {
+  test('registry lookup wins when question_id is known', () => {
+    const result = classifyQuestion({ question_id: 'ship-test-failure-triage' });
+    expect(result.oneWay).toBe(true);
+    expect(result.reason).toBe('registry');
+
+    const safeResult = classifyQuestion({ question_id: 'ship-changelog-voice-polish' });
+    expect(safeResult.oneWay).toBe(false);
+    expect(safeResult.reason).toBe('registry');
+  });
+
+  test('unknown question_id falls through to other checks', () => {
+    const result = classifyQuestion({ question_id: 'some-ad-hoc-question-id' });
+    expect(result.reason).not.toBe('registry');
+  });
+
+  test('keyword fallback catches destructive summaries', () => {
+    const cases = [
+      'Delete this directory and all its contents?',
+      'Run rm -rf /tmp/scratch — proceed?',
+      'Force-push main?',
+      'git reset --hard origin/main — ok?',
+      'DROP TABLE users — confirm?',
+      'kubectl delete namespace prod',
+      'terraform destroy the staging cluster',
+      'rotate the API key',
+      'breaking change to the public API — ship anyway?',
+    ];
+    for (const summary of cases) {
+      const result = classifyQuestion({ summary });
+      expect(result.oneWay).toBe(true);
+      expect(result.reason).toBe('keyword');
+      expect(result.matched).toBeDefined();
+    }
+  });
+
+  test('skill-category fallback fires for cso:approval and land-and-deploy:approval', () => {
+    expect(isOneWayDoor({ skill: 'cso', category: 'approval' })).toBe(true);
+    expect(isOneWayDoor({ skill: 'land-and-deploy', category: 'approval' })).toBe(true);
+  });
+
+  test('benign questions default to two-way', () => {
+    const benign = [
+      'Want to update the changelog voice?',
+      'Which mode should plan review use?',
+      'Open the essay in your browser?',
+    ];
+    for (const summary of benign) {
+      const result = classifyQuestion({ summary });
+      expect(result.oneWay).toBe(false);
+      expect(result.reason).toBe('default-two-way');
+    }
+  });
+
+  test('keyword patterns are non-empty', () => {
+    expect(DESTRUCTIVE_PATTERN_LIST.length).toBeGreaterThan(15);
+  });
+
+  test('skill-category set covers security + deploy', () => {
+    expect(ONE_WAY_SKILL_CATEGORY_SET.has('cso:approval')).toBe(true);
+    expect(ONE_WAY_SKILL_CATEGORY_SET.has('land-and-deploy:approval')).toBe(true);
   });
 });
 
