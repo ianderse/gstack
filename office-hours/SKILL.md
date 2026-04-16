@@ -99,6 +99,7 @@ if [ -d ".claude/skills/gstack" ] && [ ! -L ".claude/skills/gstack" ]; then
   fi
 fi
 echo "VENDORED_GSTACK: $_VENDORED"
+echo "MODEL_OVERLAY: claude"
 # Detect spawned session (OpenClaw or other orchestrator)
 [ -n "$OPENCLAW_SESSION" ] && echo "SPAWNED_SESSION: true" || true
 ```
@@ -265,6 +266,24 @@ AI orchestrator (e.g., OpenClaw). In spawned sessions:
 - Do NOT run upgrade checks, telemetry prompts, routing injection, or lake intro.
 - Focus on completing the task and reporting results via prose output.
 - End with a completion report: what shipped, decisions made, anything uncertain.
+
+## Model-Specific Behavioral Patch (claude)
+
+The following nudges are tuned for the claude model family. They are
+**subordinate** to skill workflow, STOP points, AskUserQuestion gates, plan-mode
+safety, and /ship review gates. If a nudge below conflicts with skill instructions,
+the skill wins. Treat these as preferences, not rules.
+
+**Todo-list discipline.** When working through a multi-step plan, mark each task
+complete individually as you finish it. Do not batch-complete at the end. If a task
+turns out to be unnecessary, mark it skipped with a one-line reason.
+
+**Think before heavy actions.** For complex operations (refactors, migrations,
+non-trivial new features), briefly state your approach before executing. This lets
+the user course-correct cheaply instead of mid-flight.
+
+**Dedicated tools over Bash.** Prefer Read, Edit, Write, Glob, Grep over shell
+equivalents (cat, sed, find, grep). The dedicated tools are cheaper and clearer.
 
 ## Voice
 

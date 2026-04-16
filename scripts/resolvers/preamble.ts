@@ -1,5 +1,6 @@
 import type { TemplateContext } from './types';
 import { getHostConfig } from '../../hosts/index';
+import { generateModelOverlay } from './model-overlay';
 
 /**
  * Preamble architecture — why every skill needs this
@@ -97,6 +98,7 @@ if [ -d ".claude/skills/gstack" ] && [ ! -L ".claude/skills/gstack" ]; then
   fi
 fi
 echo "VENDORED_GSTACK: $_VENDORED"
+echo "MODEL_OVERLAY: ${ctx.model ?? 'none'}"
 # Detect spawned session (OpenClaw or other orchestrator)
 [ -n "$OPENCLAW_SESSION" ] && echo "SPAWNED_SESSION: true" || true
 \`\`\``;
@@ -747,10 +749,11 @@ export function generatePreamble(ctx: TemplateContext): string {
     generateRoutingInjection(ctx),
     generateVendoringDeprecation(ctx),
     generateSpawnedSessionCheck(),
+    generateModelOverlay(ctx),
     generateVoiceDirective(tier),
     ...(tier >= 2 ? [generateContextRecovery(ctx), generateAskUserFormat(ctx), generateCompletenessSection(), generateContextHealth()] : []),
     ...(tier >= 3 ? [generateRepoModeSection(), generateSearchBeforeBuildingSection(ctx)] : []),
     generateCompletionStatus(ctx),
   ];
-  return sections.join('\n\n');
+  return sections.filter(s => s && s.trim().length > 0).join('\n\n');
 }

@@ -43,6 +43,21 @@ const HOST_ARG_VAL: HostArg = (() => {
 // For single-host mode, HOST is the host. For --host all, it's set per iteration below.
 let HOST: Host = HOST_ARG_VAL === 'all' ? 'claude' : HOST_ARG_VAL;
 
+// ─── Model Overlay Selection ────────────────────────────────
+// --model is explicit. We do NOT auto-detect from host (host ≠ model).
+// Default is 'claude'. Missing overlay file → empty string (graceful).
+import { ALL_MODEL_NAMES, resolveModel, type Model } from './models';
+const MODEL_ARG = process.argv.find(a => a.startsWith('--model'));
+const MODEL_ARG_VAL: Model = (() => {
+  if (!MODEL_ARG) return 'claude';
+  const val = MODEL_ARG.includes('=') ? MODEL_ARG.split('=')[1] : process.argv[process.argv.indexOf(MODEL_ARG) + 1];
+  const resolved = resolveModel(val);
+  if (!resolved) {
+    throw new Error(`Unknown model: ${val}. Use ${ALL_MODEL_NAMES.join(', ')}, or a family variant (e.g., claude-opus-4-7, gpt-5.4-mini, o3).`);
+  }
+  return resolved;
+})();
+
 // HostPaths, HOST_PATHS, and TemplateContext imported from ./resolvers/types (line 7-8)
 // Design constants (AI_SLOP_BLACKLIST, OPENAI_HARD_REJECTIONS, OPENAI_LITMUS_CHECKS)
 // live in ./resolvers/constants and are consumed by resolvers directly.
@@ -398,7 +413,7 @@ function processTemplate(tmplPath: string, host: Host = 'claude'): { outputPath:
   const tierMatch = tmplContent.match(/^preamble-tier:\s*(\d+)$/m);
   const preambleTier = tierMatch ? parseInt(tierMatch[1], 10) : undefined;
 
-  const ctx: TemplateContext = { skillName, tmplPath, benefitsFrom, host, paths: HOST_PATHS[host], preambleTier };
+  const ctx: TemplateContext = { skillName, tmplPath, benefitsFrom, host, paths: HOST_PATHS[host], preambleTier, model: MODEL_ARG_VAL };
 
   // Replace placeholders (supports parameterized: {{NAME:arg1:arg2}})
   // Config-driven: suppressedResolvers return empty string for this host
