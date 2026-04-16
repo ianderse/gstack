@@ -454,6 +454,185 @@ describe('one-way-doors classifier', () => {
   });
 });
 
+// -----------------------------------------------------------------------
+// Preamble injection — the QUESTION_TUNING section must appear for tier >=2
+// -----------------------------------------------------------------------
+
+describe('preamble — QUESTION_TUNING injection', () => {
+  test('tier 2+ skills include the Question Tuning section', async () => {
+    const { generatePreamble } = await import('../scripts/resolvers/preamble');
+    const ctx = {
+      skillName: 'test-skill',
+      tmplPath: 'test.tmpl',
+      host: 'claude' as const,
+      paths: {
+        skillRoot: '~/.claude/skills/gstack',
+        localSkillRoot: '.claude/skills/gstack',
+        binDir: '~/.claude/skills/gstack/bin',
+        browseDir: '~/.claude/skills/gstack/browse/dist',
+        designDir: '~/.claude/skills/gstack/design/dist',
+      },
+      preambleTier: 2,
+    };
+    const out = generatePreamble(ctx);
+    expect(out).toContain('QUESTION_TUNING: $_QUESTION_TUNING');
+    expect(out).toContain('## Question Tuning');
+    expect(out).toContain('gstack-question-preference --check');
+    expect(out).toContain('gstack-question-log');
+    expect(out).toContain('profile-poisoning defense');
+    expect(out).toContain('inline-user');
+  });
+
+  test('tier 1 skills do NOT include Question Tuning section', async () => {
+    const { generatePreamble } = await import('../scripts/resolvers/preamble');
+    const ctx = {
+      skillName: 'test-skill',
+      tmplPath: 'test.tmpl',
+      host: 'claude' as const,
+      paths: {
+        skillRoot: '~/.claude/skills/gstack',
+        localSkillRoot: '.claude/skills/gstack',
+        binDir: '~/.claude/skills/gstack/bin',
+        browseDir: '~/.claude/skills/gstack/browse/dist',
+        designDir: '~/.claude/skills/gstack/design/dist',
+      },
+      preambleTier: 1,
+    };
+    const out = generatePreamble(ctx);
+    // QUESTION_TUNING config echo still fires (it's in the bash block which all tiers get),
+    // but the prose section should NOT be present for tier 1.
+    expect(out).not.toContain('## Question Tuning');
+  });
+
+  test('codex host produces different paths', async () => {
+    const { generateQuestionTuning } = await import('../scripts/resolvers/question-tuning');
+    const codexCtx = {
+      skillName: 'test',
+      tmplPath: 'x',
+      host: 'codex' as const,
+      paths: {
+        skillRoot: '$GSTACK_ROOT',
+        localSkillRoot: '.agents/skills/gstack',
+        binDir: '$GSTACK_BIN',
+        browseDir: '$GSTACK_BROWSE',
+        designDir: '$GSTACK_DESIGN',
+      },
+    };
+    const out = generateQuestionTuning(codexCtx);
+    expect(out).toContain('$GSTACK_BIN/gstack-question-preference');
+    expect(out).toContain('$GSTACK_BIN/gstack-question-log');
+  });
+});
+
+// -----------------------------------------------------------------------
+// End-to-end: log → preference → derive pipeline
+//
+// Exercises the real binaries (not mocks) to make sure the schema contract
+// between them actually holds.
+// -----------------------------------------------------------------------
+
+describe('end-to-end pipeline (binaries working together)', () => {
+  test('log many expand choices → derive pushes scope_appetite up', () => {
+    const tmpHome = fs.mkdtempSync(path.join(require('os').tmpdir(), 'gstack-e2e-'));
+    try {
+      const env = { ...process.env, GSTACK_HOME: tmpHome };
+      const { spawnSync } = require('child_process');
+      const logBin = path.join(ROOT, 'bin', 'gstack-question-log');
+      const devBin = path.join(ROOT, 'bin', 'gstack-developer-profile');
+
+      for (let i = 0; i < 5; i++) {
+        const r = spawnSync(
+          logBin,
+          [
+            JSON.stringify({
+              skill: 'plan-ceo-review',
+              question_id: 'plan-ceo-review-mode',
+              question_summary: 'mode?',
+              user_choice: 'expand',
+              session_id: `s${i}`,
+              ts: `2026-04-0${i + 1}T10:00:00Z`,
+            }),
+          ],
+          { env, cwd: ROOT, encoding: 'utf-8' },
+        );
+        expect(r.status).toBe(0);
+      }
+
+      const derive = spawnSync(devBin, ['--derive'], { env, cwd: ROOT, encoding: 'utf-8' });
+      expect(derive.status).toBe(0);
+
+      const profileOut = spawnSync(devBin, ['--profile'], { env, cwd: ROOT, encoding: 'utf-8' });
+      const p = JSON.parse(profileOut.stdout);
+      expect(p.inferred.sample_size).toBe(5);
+      expect(p.inferred.values.scope_appetite).toBeGreaterThan(0.5);
+    } finally {
+      fs.rmSync(tmpHome, { recursive: true, force: true });
+    }
+  });
+
+  test('preference blocks tune: write from inline-tool-output in full pipeline', () => {
+    const tmpHome = fs.mkdtempSync(path.join(require('os').tmpdir(), 'gstack-e2e-'));
+    try {
+      const env = { ...process.env, GSTACK_HOME: tmpHome };
+      const { spawnSync } = require('child_process');
+      const prefBin = path.join(ROOT, 'bin', 'gstack-question-preference');
+
+      const r = spawnSync(
+        prefBin,
+        [
+          '--write',
+          JSON.stringify({ question_id: 'fake-id', preference: 'never-ask', source: 'inline-tool-output' }),
+        ],
+        { env, cwd: ROOT, encoding: 'utf-8' },
+      );
+      expect(r.status).toBe(2);
+      expect(r.stderr).toContain('poisoning');
+
+      // Verify no preference was written
+      const read = spawnSync(prefBin, ['--read'], { env, cwd: ROOT, encoding: 'utf-8' });
+      const prefs = JSON.parse(read.stdout);
+      expect(prefs['fake-id']).toBeUndefined();
+    } finally {
+      fs.rmSync(tmpHome, { recursive: true, force: true });
+    }
+  });
+
+  test('migration preserves sessions, builder-profile shim still works', () => {
+    const tmpHome = fs.mkdtempSync(path.join(require('os').tmpdir(), 'gstack-e2e-'));
+    try {
+      const env = { ...process.env, GSTACK_HOME: tmpHome };
+      const { spawnSync } = require('child_process');
+      const devBin = path.join(ROOT, 'bin', 'gstack-developer-profile');
+      const shimBin = path.join(ROOT, 'bin', 'gstack-builder-profile');
+
+      // Seed a legacy file
+      fs.writeFileSync(
+        path.join(tmpHome, 'builder-profile.jsonl'),
+        [
+          { date: '2026-01-01', mode: 'builder', project_slug: 'x', signals: ['taste'] },
+          { date: '2026-02-01', mode: 'startup', project_slug: 'x', signals: ['named_users'] },
+          { date: '2026-03-01', mode: 'builder', project_slug: 'y', signals: ['agency'] },
+        ]
+          .map((e) => JSON.stringify(e))
+          .join('\n') + '\n',
+      );
+
+      // Migrate
+      const m = spawnSync(devBin, ['--migrate'], { env, cwd: ROOT, encoding: 'utf-8' });
+      expect(m.status).toBe(0);
+
+      // Legacy shim should still return the same KEY: VALUE shape
+      const shimOut = spawnSync(shimBin, [], { env, cwd: ROOT, encoding: 'utf-8' });
+      expect(shimOut.status).toBe(0);
+      expect(shimOut.stdout).toContain('SESSION_COUNT: 3');
+      expect(shimOut.stdout).toContain('TIER: welcome_back');
+      expect(shimOut.stdout).toContain('CROSS_PROJECT: true');
+    } finally {
+      fs.rmSync(tmpHome, { recursive: true, force: true });
+    }
+  });
+});
+
 function findAllTemplates(): string[] {
   const results: string[] = [];
   function walk(dir: string) {
