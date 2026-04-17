@@ -20,6 +20,24 @@
 - 118 new tests across 4 test files: `test/plan-tune.test.ts` (47 tests — schema, helpers, safety, classifier, signal map, archetypes, preamble injection, end-to-end pipeline), `test/gstack-question-log.test.ts` (21 tests — valid payloads, rejected payloads, injection defense), `test/gstack-question-preference.test.ts` (31 tests — check/write/read/clear/stats + user-origin gate + schema validation), `test/gstack-developer-profile.test.ts` (25 tests — read/migrate/derive/trace/gap/vibe/check-mismatch). Gate-tier E2E test `skill-e2e-plan-tune.test.ts` registered (runs on `bun run test:evals`).
 - Scope rollback driven by outside-voice review. The initial CEO EXPANSION plan bundled psychographic auto-decide + blind-spot coach + LANDED celebration + full substrate wiring. Codex's 20-point critique caught that without a typed question registry, "substrate" was marketing; E1/E4/E6 formed a logical contradiction; profile poisoning was unaddressed; LANDED in the preamble injected side effects into every skill's hot path. Accepted the rollback: v1 ships the schema + observation layer, v2 adds behavior adaptation only after the foundation proves durable. All six expansions are tracked as P0 TODOs with explicit acceptance criteria.
 
+## [0.18.3.0] - 2026-04-17
+
+### Added
+- **Windows cookie import.** `/setup-browser-cookies` now works on Windows. Point it at Chrome, Edge, Brave, or Chromium, pick a profile, and gstack will pull your real browser cookies into the headless session. Handles AES-256-GCM (Chrome 80+), DPAPI key unwrap via PowerShell, and falls back to a headless CDP session for v20 App-Bound Encryption on Chrome 127+. Windows users can now do authenticated QA testing with `/qa` and `/design-review` for the first time.
+- **One-command OpenCode install.** `./setup --host opencode` now wires up gstack skills for OpenCode the same way it does for Claude Code and Codex. No more manual workaround.
+
+### Fixed
+- **No more permission prompts on every skill invocation.** Every `/browse`, `/qa`, `/qa-only`, `/design-review`, `/office-hours`, `/canary`, `/pair-agent`, `/benchmark`, `/land-and-deploy`, `/design-shotgun`, `/design-consultation`, `/design-html`, `/plan-design-review`, and `/open-gstack-browser` invocation used to trigger Claude Code's sandbox asking about "tilde in assignment value." Replaced bare `~/` with `"$HOME/..."` in the browse and design resolvers plus a handful of templates that still used the old pattern. Every skill runs silently now.
+- **Multi-step QA actually works.** The `$B` browse server was dying between Bash tool invocations — Claude Code's sandbox kills the parent shell when a command finishes, and the server took that as a cue to shut down. Now the server persists across calls, keeping your cookies, page state, and navigation intact. Run `$B goto`, then `$B fill`, then `$B click` in three separate Bash calls and it just works. A 30-minute idle timeout still handles eventual cleanup. `Ctrl+C` and `/stop` still do an immediate shutdown.
+- **Cookie picker stops stranding the UI.** If the launching CLI exited mid-import, the picker page would flash `Failed to fetch` because the server had shut down under it. The browse server now stays alive while any picker code or session is live.
+- **OpenClaw skills load cleanly in Codex.** The 4 hand-authored ClawHub skills (ceo-review, investigate, office-hours, retro) had frontmatter with unquoted colons and non-standard `version`/`metadata` fields that stricter parsers rejected. Now they load without errors on Codex CLI and render correctly on GitHub.
+
+### For contributors
+- Community wave lands 6 PRs: #993 (byliu-labs), #994 (joelgreen), #996 (voidborne-d), #864 (cathrynlavery), #982 (breakneo), #892 (msr-hickory).
+- SIGTERM handling is now mode-aware. In normal mode the server ignores SIGTERM so Claude Code's sandbox doesn't tear it down mid-session. In headed mode (`/open-gstack-browser`) and tunnel mode (`/pair-agent`) SIGTERM still triggers a clean shutdown — those modes skip idle cleanup, so without the mode gate orphan daemons would accumulate forever. Note that v0.18.1.0 also disables the parent-PID watchdog when `BROWSE_HEADED=1`, so headed mode is doubly protected. Inline comments document the resolution order.
+- Windows v20 App-Bound Encryption CDP fallback now logs the Chrome version on entry and has an inline comment documenting the debug-port security posture (127.0.0.1-only, random port in [9222, 9321] for collision avoidance, always killed in finally).
+- New regression test `test/openclaw-native-skills.test.ts` pins OpenClaw skill frontmatter to `name` + `description` only — catches version/metadata drift at PR time.
+
 ## [0.18.2.0] - 2026-04-17
 
 ### Fixed
