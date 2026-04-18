@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.1.2.0] - 2026-04-19
+## [1.1.3.0] - 2026-04-19
 
 ### Changed
 - **`/checkpoint` is now `/context-save` + `/context-restore`.** Claude Code treats `/checkpoint` as a native rewind alias in current environments, which was shadowing the gstack skill. Symptom: you'd type `/checkpoint`, the agent would describe it as a "built-in you need to type directly," and nothing would get saved. The fix is a clean rename and a split into two skills. One that saves, one that restores. Your old saved files still load via `/context-restore` (storage path unchanged).
@@ -14,12 +14,33 @@
 - **Empty-set bug on macOS.** If you ran `/checkpoint resume` (now `/context-restore`) with zero saved files, `find ... | xargs ls -1t` would fall back to listing your current directory. Confusing output, no clean "no saved contexts yet" message. Replaced with `find | sort -r | head` so empty input stays empty.
 
 ### For contributors
-- New `gstack-upgrade/migrations/v1.1.2.0.sh` removes the stale on-disk `/checkpoint` install so Claude Code's native `/rewind` alias is no longer shadowed. Ownership-guarded across three install shapes (directory symlink into gstack, directory with SKILL.md symlinked into gstack, anything else). User-owned `/checkpoint` skills preserved with a notice. Migration hardened after adversarial review: explicit `HOME` unset/empty guard, `realpath` with python3 fallback, `rm --` flag, macOS sidecar handling.
+- New `gstack-upgrade/migrations/v1.1.3.0.sh` removes the stale on-disk `/checkpoint` install so Claude Code's native `/rewind` alias is no longer shadowed. Ownership-guarded across three install shapes (directory symlink into gstack, directory with SKILL.md symlinked into gstack, anything else). User-owned `/checkpoint` skills preserved with a notice. Migration hardened after adversarial review: explicit `HOME` unset/empty guard, `realpath` with python3 fallback, `rm --` flag, macOS sidecar handling.
 - `test/migration-checkpoint-ownership.test.ts` ships 7 scenarios covering all 3 install shapes + idempotency + no-op-when-gstack-not-installed + SKILL.md-symlink-outside-gstack. Free tier, ~85ms.
 - Split `checkpoint-save-resume` E2E into `context-save-writes-file` and `context-restore-loads-latest`. The latter seeds two files with scrambled mtimes so the "filename-prefix, not mtime" guarantee is locked in.
 - `context-save` now sanitizes the title in bash (allowlist `[a-z0-9.-]`, cap 60 chars) instead of trusting LLM-side slugification, and appends a random suffix on same-second collisions to enforce the append-only contract.
 - `context-restore` caps its filename listing at 20 most-recent entries so users with 10k+ saved files don't blow the context window.
 - `test/skill-e2e-autoplan-dual-voice.test.ts` was shipped broken on main (wrong `runSkillTest` option names, wrong result-field access, wrong helper signatures, missing Agent/Skill tools). Fixed end-to-end: 1/1 pass on first attempt, $0.68, 211s. Voice-detection regexes now match JSON-shaped tool_use entries and phase-completion markers, not bare prompt-text mentions.
+- Added 8 live-fire E2E tests in `test/skill-e2e-context-skills.test.ts` that spawn `claude -p` with the Skill tool enabled and assert on the routing path, not hand-fed section prompts. Covers: save routing, save-then-restore round-trip, fragment-match restore, empty-state graceful message, `/context-restore list` delegation to `/context-save list`, legacy file compat, branch-filter default, and `--all` flag. 21 additional free-tier hardening tests in `test/context-save-hardening.test.ts` pin the title-sanitizer allowlist, collision-safe filenames, empty-set fallback, and migration HOME guard.
+- New `test/skill-collision-sentinel.test.ts` — insurance policy against upstream slash-command shadowing. Enumerates every gstack skill name and cross-checks against a per-host list of known built-in slash commands (23 Claude Code built-ins tracked so far). When a host ships a new built-in, add it to `KNOWN_BUILTINS` and the test flags the collision before users find it. `/review` collision with Claude Code's `/review` documented in `KNOWN_COLLISIONS_TOLERATED` with a written justification; the exception list is validated against live skills on every run so stale entries fail loud.
+- `runSkillTest` in `test/helpers/session-runner.ts` now accepts an `env:` option for per-test env overrides. Prevents tests from having to stuff `GSTACK_HOME=...` into the prompt, which was causing the agent to bypass the Skill tool. All 8 new E2E tests use `env: { GSTACK_HOME: gstackHome }`.
+
+## [1.1.2.0] - 2026-04-19
+
+### Fixed
+- **`/plan-ceo-review` SCOPE EXPANSION mode stays expansive.** If you asked the CEO review to dream big, proposals were collapsing into dry feature bullets ("Add real-time notifications. Improves retention by Y%"). The V1 writing-style rules steered every outcome into diagnostic-pain framing. Rule 2 and rule 4 in the shared preamble now cover three framings: pain reduction, capability unlocked, and forcing-question pressure. Cathedral language survives the clarity layer. Ask for a 10x vision, get one.
+- **`/office-hours` keeps its edge.** Startup-mode Q3 (Desperate Specificity) stopped collapsing into "Who is your target user?" The forcing question now stacks three pressures, matched to the domain of the idea — career impact for B2B, daily pain for consumer, weekend project unlocked for hobby and open-source. Builder mode stays wild: "what if you also..." riffs and adjacent unlocks come through, not PRD-voice feature roadmaps.
+
+### Added
+- **Gate-tier eval tests catch mode-posture regressions on every PR.** Three new E2E tests fire when the shared preamble, the plan-ceo-review template, or the office-hours template change. A Sonnet judge scores each mode on two axes: felt-experience vs decision-preservation for expansion, stacked-pressure vs domain-matched-consequence for forcing, unexpected-combinations vs excitement-over-optimization for builder. The original V1 regression shipped because nothing caught it. This closes that gap.
+
+### For contributors
+- Writing Style rule 2 and rule 4 in `scripts/resolvers/preamble.ts` each present three paired framing examples instead of one. Rule 3 adds an explicit exception for stacked forcing questions.
+- `plan-ceo-review/SKILL.md.tmpl` gets a new `### 0D-prelude. Expansion Framing` subsection shared by SCOPE EXPANSION and SELECTIVE EXPANSION.
+- `office-hours/SKILL.md.tmpl` gets inline forcing exemplar (Q3) and wild exemplar (builder operating principles). Anchored by stable heading, not line numbers.
+- New `judgePosture(mode, text)` helper in `test/helpers/llm-judge.ts` (Sonnet judge, dual-axis rubric per mode).
+- Three test fixtures in `test/fixtures/mode-posture/` — expansion plan, forcing pitch, builder idea.
+- Three entries registered in `E2E_TOUCHFILES` + `E2E_TIERS`: `plan-ceo-review-expansion-energy`, `office-hours-forcing-energy`, `office-hours-builder-wildness` — all `gate` tier.
+- Review history on this branch: CEO review (HOLD SCOPE) + Codex plan review (30 findings, drove approach pivot from "add new rule #5 taxonomy" to "rewrite rule 2-4 examples"). One eng review pass caught the test-infrastructure target (originally pointed at `test/skill-llm-eval.test.ts`, which does static analysis — actually needs E2E).
 
 ## [1.1.1.0] - 2026-04-18
 

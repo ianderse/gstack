@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Migration: v1.1.2.0 — Remove stale /checkpoint skill installs
+# Migration: v1.1.3.0 — Remove stale /checkpoint skill installs
 #
 # Claude Code ships /checkpoint as a native alias for /rewind, which was
 # shadowing the gstack checkpoint skill. The skill has been split into
@@ -25,7 +25,7 @@ set -euo pipefail
 # CI runners) survives and produces dangerous absolute paths like
 # "/.claude/skills/...". Abort cleanly.
 if [ -z "${HOME:-}" ]; then
-  echo "  [v1.1.2.0] HOME is unset or empty — skipping migration." >&2
+  echo "  [v1.1.3.0] HOME is unset or empty — skipping migration." >&2
   exit 0
 fi
 
@@ -75,10 +75,10 @@ if [ -L "$OLD_TOPLEVEL" ]; then
   target_real=$(resolve_real "$OLD_TOPLEVEL")
   if [ -n "$GSTACK_ROOT_REAL" ] && path_inside "$target_real" "$GSTACK_ROOT_REAL"; then
     rm -- "$OLD_TOPLEVEL"
-    echo "  [v1.1.2.0] Removed stale /checkpoint symlink (was shadowing Claude Code's /rewind alias)."
+    echo "  [v1.1.3.0] Removed stale /checkpoint symlink (was shadowing Claude Code's /rewind alias)."
     removed_any=1
   else
-    echo "  [v1.1.2.0] Leaving $OLD_TOPLEVEL alone — symlink target is outside gstack (or unresolvable)."
+    echo "  [v1.1.3.0] Leaving $OLD_TOPLEVEL alone — symlink target is outside gstack (or unresolvable)."
   fi
 elif [ -d "$OLD_TOPLEVEL" ]; then
   # Regular directory. Only remove if it contains exactly one file named
@@ -92,13 +92,13 @@ elif [ -d "$OLD_TOPLEVEL" ]; then
       # Strip macOS sidecars first (not user content), then remove the dir.
       find "$OLD_TOPLEVEL" -maxdepth 1 \( -name '.DS_Store' -o -name '._*' \) -type f -delete 2>/dev/null || true
       rm -r -- "$OLD_TOPLEVEL"
-      echo "  [v1.1.2.0] Removed stale /checkpoint install directory (gstack prefix-mode)."
+      echo "  [v1.1.3.0] Removed stale /checkpoint install directory (gstack prefix-mode)."
       removed_any=1
     else
-      echo "  [v1.1.2.0] Leaving $OLD_TOPLEVEL alone — SKILL.md symlink target is outside gstack."
+      echo "  [v1.1.3.0] Leaving $OLD_TOPLEVEL alone — SKILL.md symlink target is outside gstack."
     fi
   else
-    echo "  [v1.1.2.0] Leaving $OLD_TOPLEVEL alone — not a gstack-owned install (has custom content)."
+    echo "  [v1.1.3.0] Leaving $OLD_TOPLEVEL alone — not a gstack-owned install (has custom content)."
   fi
 fi
 # Missing → no-op (idempotency).
@@ -111,10 +111,10 @@ if [ -L "$OLD_NAMESPACED" ]; then
   target_real=$(resolve_real "$OLD_NAMESPACED")
   if [ -n "$GSTACK_ROOT_REAL" ] && path_inside "$target_real" "$GSTACK_ROOT_REAL"; then
     rm -- "$OLD_NAMESPACED"
-    echo "  [v1.1.2.0] Removed stale ~/.claude/skills/gstack/checkpoint symlink."
+    echo "  [v1.1.3.0] Removed stale ~/.claude/skills/gstack/checkpoint symlink."
     removed_any=1
   else
-    echo "  [v1.1.2.0] Leaving $OLD_NAMESPACED alone — symlink target is outside gstack."
+    echo "  [v1.1.3.0] Leaving $OLD_NAMESPACED alone — symlink target is outside gstack."
   fi
 elif [ -d "$OLD_NAMESPACED" ]; then
   # Regular directory. This is the gstack-prefix install location. Check that
@@ -123,15 +123,15 @@ elif [ -d "$OLD_NAMESPACED" ]; then
   target_real=$(resolve_real "$OLD_NAMESPACED")
   if [ -n "$GSTACK_ROOT_REAL" ] && path_inside "$target_real" "$GSTACK_ROOT_REAL"; then
     rm -rf -- "$OLD_NAMESPACED"
-    echo "  [v1.1.2.0] Removed stale ~/.claude/skills/gstack/checkpoint/ (replaced by context-save + context-restore)."
+    echo "  [v1.1.3.0] Removed stale ~/.claude/skills/gstack/checkpoint/ (replaced by context-save + context-restore)."
     removed_any=1
   else
-    echo "  [v1.1.2.0] Leaving $OLD_NAMESPACED alone — resolves outside gstack."
+    echo "  [v1.1.3.0] Leaving $OLD_NAMESPACED alone — resolves outside gstack."
   fi
 fi
 
 if [ "$removed_any" = "1" ]; then
-  echo "  [v1.1.2.0] /checkpoint is now Claude Code's native /rewind alias. Use /context-save to save state and /context-restore to resume."
+  echo "  [v1.1.3.0] /checkpoint is now Claude Code's native /rewind alias. Use /context-save to save state and /context-restore to resume."
 fi
 
 exit 0

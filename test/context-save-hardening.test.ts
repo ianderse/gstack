@@ -314,9 +314,9 @@ describe('context-restore: find + sort + head cap', () => {
 
 // ─── Migration HOME guard ──────────────────────────────────────────────────
 
-describe('migration v1.1.2.0: HOME guard', () => {
+describe('migration v1.1.3.0: HOME guard', () => {
   let tmp: string;
-  const MIGRATION = path.join(ROOT, 'gstack-upgrade', 'migrations', 'v1.1.2.0.sh');
+  const MIGRATION = path.join(ROOT, 'gstack-upgrade', 'migrations', 'v1.1.3.0.sh');
 
   beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ctx-home-')); });
   afterEach(() => { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {} });
