@@ -3,9 +3,9 @@
 ## [1.3.0.0] - 2026-04-19
 
 ## **Your design skills learn your taste.**
-## **Your session state survives a laptop close.**
+## **Your session state lives in git, not a black box.**
 
-v1.3 is about the things you do every day. `/design-shotgun` now remembers which fonts, colors, and layouts you approve across sessions, so the next round of variants leans toward your actual taste instead of resetting to Inter every time. `/design-consultation` has a "would a human designer be embarrassed by this?" self-gate in Phase 5 and a "what's the one thing someone will remember?" forcing question in Phase 1, AI-slop output gets discarded before it reaches you. Continuous checkpoint mode (flip it on with `gstack-config set checkpoint_mode continuous`) auto-commits work with `WIP:` prefixes so closing your laptop mid-refactor doesn't vaporize your decisions, and `/context-restore` picks you right back up.
+v1.3 is about the things you do every day. `/design-shotgun` now remembers which fonts, colors, and layouts you approve across sessions, so the next round of variants leans toward your actual taste instead of resetting to Inter every time. `/design-consultation` has a "would a human designer be embarrassed by this?" self-gate in Phase 5 and a "what's the one thing someone will remember?" forcing question in Phase 1, AI-slop output gets discarded before it reaches you. Continuous checkpoint mode (flip it on with `gstack-config set checkpoint_mode continuous`) writes session state to git as `WIP:` commits with structured bodies you can grep, review, and restore explicitly. Claude Code already manages its own session state, this is a parallel track you control, portable across tools and branches instead of tied to one agent's internal format.
 
 ### The numbers that matter
 
@@ -16,15 +16,15 @@ Setup: these come from the v1.3 feature surface. Reproducible via `grep "Generat
 | **Design-variant convergence gate**              | no requirement               | **3 axes required** (font + palette + layout must differ) | **+3**  |
 | **AI-slop font blacklist**                       | ~8 fonts                     | **10+** (added Space Grotesk, system-ui as primary) | **+2+** |
 | **Taste memory across `/design-shotgun` rounds** | none                         | **per-project JSON, 5%/wk decay**       | **new**     |
-| **Session state after mid-refactor crash**       | lost since last manual commit| **auto-WIP commits with structured body** (opt-in) | **new** |
+| **Session state format**                         | Claude Code's opaque session store | **git commits + `[gstack-context]` bodies + markdown** (parallel track) | **new** |
 | **`/context-restore` sources**                   | markdown files only          | **markdown + `[gstack-context]` from WIP commits** | **+1** |
 | **Models with behavioral overlays**              | 1 (Claude implicit)          | **5** (claude, gpt, gpt-5.4, gemini, o-series) | **+4** |
 
-The single most striking row: closing your laptop mid-session used to cost you every decision since the last manual commit. Now, with continuous mode on, `WIP:` commits land at every meaningful step with a structured `[gstack-context]` body (decisions made, remaining work, failed approaches). `/context-restore` reads those commits and hands your next session the exact state you left.
+The single most striking row: session state stops being a black box. Claude Code's built-in session management works fine on its own terms, but you can't `grep` it, you can't review it, you can't hand it to a different tool. Continuous mode writes `WIP:` commits with `[gstack-context]` bodies (decisions made, remaining work, failed approaches) that any tool reading git can see. `git log --grep "WIP:"` shows the whole thread. You're in control, not locked in.
 
 ### What this means for gstack users
 
-If you're a solo builder or founder shipping a product one sprint at a time, `/design-shotgun` stops handing you the same four variants every time and starts learning which ones you pick. `/design-consultation` stops defaulting to Inter + gray + rounded-corners and forces itself to answer "what's memorable?" before it finishes. Continuous checkpoint mode means your session state survives crashes, context switches, and forgotten laptops. Run `/gstack-upgrade`, try `/design-shotgun` on your next landing page, and approve a variant so the taste engine has a starting signal.
+If you're a solo builder or founder shipping a product one sprint at a time, `/design-shotgun` stops handing you the same four variants every time and starts learning which ones you pick. `/design-consultation` stops defaulting to Inter + gray + rounded-corners and forces itself to answer "what's memorable?" before it finishes. Continuous checkpoint mode gives you a parallel, inspectable, portable record of session state that lives alongside Claude Code's own session store rather than replacing it, so when you need to hand work off to a different tool or review what your agent actually decided, it's right there in `git log`. Run `/gstack-upgrade`, try `/design-shotgun` on your next landing page, and approve a variant so the taste engine has a starting signal.
 
 ### Itemized changes
 
@@ -35,10 +35,10 @@ If you're a solo builder or founder shipping a product one sprint at a time, `/d
 - **Anti-slop design constraints.** `/design-consultation` now asks "What's the one thing someone will remember?" as a forcing question in Phase 1, and runs a "Would a human designer be embarrassed by this?" self-gate in Phase 5 — output that fails the gate gets discarded and regenerated. `/design-shotgun` gets an anti-convergence directive: each variant must use a different font, palette, and layout, or one of them failed. Space Grotesk (the new "safe alternative to Inter") added to the overused-fonts list. `system-ui` as a primary font added to the AI-slop blacklist.
 - **Design taste engine.** Your approvals and rejections in `/design-shotgun` get written to a persistent per-project taste profile at `~/.gstack/projects/$SLUG/taste-profile.json`. Tracks fonts, colors, layouts, and aesthetic directions with Laplace-smoothed confidence. Decays 5% per week so stale preferences fade. `/design-consultation` and `/design-shotgun` both factor in your demonstrated preferences on future runs, so variant #3 this month remembers what you liked in variant #1 last month.
 
-#### Session state that survives a crash
+#### Session state you can see, grep, and move
 
-- **Continuous checkpoint mode (opt-in, local by default).** Flip it on with `gstack-config set checkpoint_mode continuous` and skills auto-commit your work with `WIP: <description>` prefix and a structured `[gstack-context]` body (decisions made, remaining work, failed approaches). Close your laptop mid-refactor and your state survives. Push is opt-in via `checkpoint_push=true`, default is local-only so you don't accidentally trigger CI on every WIP commit.
-- **`/context-restore` reads WIP commits.** In addition to the markdown saved-context files, `/context-restore` now parses `[gstack-context]` blocks from WIP commits on the current branch. Your next session starts with the exact state you left, not a stale notes file.
+- **Continuous checkpoint mode (opt-in, local by default).** Flip it on with `gstack-config set checkpoint_mode continuous` and skills auto-commit your work with `WIP: <description>` prefix and a structured `[gstack-context]` body (decisions made, remaining work, failed approaches). This runs alongside Claude Code's built-in session management, not instead of it, and gives you a git-native track you can `grep`, review, share across tools, and restore explicitly. Push is opt-in via `checkpoint_push=true`, default is local-only so you don't accidentally trigger CI on every WIP commit.
+- **`/context-restore` reads WIP commits.** In addition to the markdown saved-context files, `/context-restore` now parses `[gstack-context]` blocks from WIP commits on the current branch. When you want to pick up where you left off with structured decisions and remaining-work in view, it's right there.
 - **`/ship` non-destructively squashes WIP commits** before creating the PR. Uses `git rebase --autosquash` scoped to WIP commits only. Non-WIP commits on the branch are preserved. Aborts on conflict with a `BLOCKED` status instead of destroying real work. So you can go wild with `WIP:` commits all week and still ship a clean bisectable PR.
 
 #### Quality-of-life
