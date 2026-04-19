@@ -2,46 +2,62 @@
 
 ## [1.3.0.0] - 2026-04-19
 
-## **Every new CLI wired to a slash command.**
-## **Zero orphan binaries ship in v1.3.**
+## **Your design skills learn your taste.**
+## **Your session state survives a laptop close.**
 
-v1.3 ships two new binaries (`gstack-model-benchmark`, `gstack-taste-update`) and one new skill (`/benchmark-models`). The delta from v1.2 isn't just "more features." It's that every new primitive is discoverable from a `/command`, not buried in a CHANGELOG bullet nobody reads. Before this cut, `gstack-model-benchmark` existed but no skill called it, so most users would never find it. Now `/benchmark-models` walks you through a cross-model comparison, and `gstack-taste-update` is already wired into `/design-shotgun`'s approval flow. First multi-provider benchmark in any agent framework, and it's one slash command away.
+v1.3 is about the things you do every day. `/design-shotgun` now remembers which fonts, colors, and layouts you approve across sessions, so the next round of variants leans toward your actual taste instead of resetting to Inter every time. `/design-consultation` has a "would a human designer be embarrassed by this?" self-gate in Phase 5 and a "what's the one thing someone will remember?" forcing question in Phase 1, AI-slop output gets discarded before it reaches you. Continuous checkpoint mode (flip it on with `gstack-config set checkpoint_mode continuous`) auto-commits work with `WIP:` prefixes so closing your laptop mid-refactor doesn't vaporize your decisions, and `/context-restore` picks you right back up.
 
 ### The numbers that matter
 
-Headline from this branch's review audit against `origin/main` (33 commits). Reproducible: `git log origin/main..HEAD --oneline` for the commit set, `bun test test/taste-engine.test.ts test/benchmark-cli.test.ts test/skill-e2e-benchmark-providers.test.ts` for the test count, `grep -rn "gstack-model-benchmark\|gstack-taste-update" --include="*.tmpl"` for wiring status.
+Setup: these come from the v1.3 feature surface. Reproducible via `grep "Generate a different" design-shotgun/SKILL.md.tmpl`, `ls model-overlays/`, `cat bin/gstack-taste-update` for the schema, and `gstack-config get checkpoint_mode` for the runtime wiring.
 
-| Metric                                           | BEFORE (initial v1.2 scope) | AFTER (v1.3)         | Δ           |
-|--------------------------------------------------|------------------------------|----------------------|-------------|
-| **New CLIs wired to a /skill**                   | 1 of 2 (50%)                 | **2 of 2 (100%)**    | **+1**      |
-| **Deterministic tests for v1.3 CLIs**            | 0                            | **32**               | **+32**     |
-| **Live-API adapter E2E (gated on `EVALS=1`)**    | 0                            | **8**                | **+8**      |
-| **Real adapter bugs caught by new tests**        | 0                            | **1** (codex `--skip-git-repo-check`) | **+1**      |
-| **Preamble composition root**                    | 740 lines                    | **~100 lines**       | **-86%**    |
-| **Models benchmarkable in one command**          | 1 (Claude only)              | **3** (Claude, GPT, Gemini) | **+2** |
+| Metric                                           | BEFORE v1.3                 | AFTER v1.3                              | Δ           |
+|--------------------------------------------------|------------------------------|-----------------------------------------|-------------|
+| **Design-variant convergence gate**              | no requirement               | **3 axes required** (font + palette + layout must differ) | **+3**  |
+| **AI-slop font blacklist**                       | ~8 fonts                     | **10+** (added Space Grotesk, system-ui as primary) | **+2+** |
+| **Taste memory across `/design-shotgun` rounds** | none                         | **per-project JSON, 5%/wk decay**       | **new**     |
+| **Session state after mid-refactor crash**       | lost since last manual commit| **auto-WIP commits with structured body** (opt-in) | **new** |
+| **`/context-restore` sources**                   | markdown files only          | **markdown + `[gstack-context]` from WIP commits** | **+1** |
+| **Models with behavioral overlays**              | 1 (Claude implicit)          | **5** (claude, gpt, gpt-5.4, gemini, o-series) | **+4** |
 
-The single most striking number: the new E2E suite caught a real codex adapter bug (`--skip-git-repo-check` missing) on its first run. That bug would have shipped silently, then surfaced later as a cryptic "Not inside a trusted directory" error to anyone running `gstack-model-benchmark` from a temp dir. One test, one regression caught, before a user ever hit it.
+The single most striking row: closing your laptop mid-session used to cost you every decision since the last manual commit. Now, with continuous mode on, `WIP:` commits land at every meaningful step with a structured `[gstack-context]` body (decisions made, remaining work, failed approaches). `/context-restore` reads those commits and hands your next session the exact state you left.
 
 ### What this means for gstack users
 
-If you're a YC founder or solo builder shipping methodology skills from one laptop, `/benchmark-models` answers "is my skill better on Opus, GPT-5.4, or Gemini" with a real benchmark table, not vibes. The design taste engine remembers which fonts, colors, and aesthetics you approve in `/design-shotgun`, so next round's variants lean toward your actual taste instead of resetting to Inter every time. Continuous checkpoint mode (opt-in, local by default) means you can close your laptop mid-refactor and `/context-restore` picks you up from a WIP commit with decisions and remaining work intact, not a stale notes file. Run `/gstack-upgrade` and try `/benchmark-models` on the skill you use most this week.
+If you're a solo builder or founder shipping a product one sprint at a time, `/design-shotgun` stops handing you the same four variants every time and starts learning which ones you pick. `/design-consultation` stops defaulting to Inter + gray + rounded-corners and forces itself to answer "what's memorable?" before it finishes. Continuous checkpoint mode means your session state survives crashes, context switches, and forgotten laptops. Run `/gstack-upgrade`, try `/design-shotgun` on your next landing page, and approve a variant so the taste engine has a starting signal.
 
 ### Itemized changes
 
 ### Added
 
-- **Per-model behavioral overlays via `--model` flag.** Different LLMs need different nudges. Run `bun run gen:skill-docs --model gpt-5.4` and every generated skill picks up GPT-tuned behavioral patches. Five overlays ship in `model-overlays/`: claude (todo discipline), gpt (anti-termination), gpt-5.4 (anti-verbosity, inherits gpt), gemini (conciseness), o-series (structured output). Overlay files are plain markdown — edit in place, no code changes. `MODEL_OVERLAY: {model}` line in the preamble output tells you which one is active. Defaults to claude. Missing overlay file → empty string (graceful), no error.
-- **Continuous checkpoint mode (opt-in, local by default).** Set `gstack-config set checkpoint_mode continuous` and skills will auto-commit your work as you go with `WIP: <description>` prefix and a structured `[gstack-context]` body block (decisions, remaining work, tried-and-failed approaches, current skill). Survives Claude Code crashes. Push is opt-in via `checkpoint_push=true` — defaults to local-only so you don't accidentally trigger CI on every WIP commit. `/context-restore` (formerly `/checkpoint resume` pre-v1.1.3) now reads both the markdown saved-context files AND the `[gstack-context]` blocks from WIP commits to reconstruct session state.
-- **`/ship` non-destructively squashes WIP commits** before creating the PR (when continuous mode is active). Uses `git rebase --autosquash` scoped to WIP commits only — preserves any non-WIP commits on the branch. Refuses to blind soft-reset when non-WIP work is mixed in (would have caused non-fast-forward push). Aborts with BLOCKED status on conflict instead of destroying real work.
-- **Feature discovery prompt after upgrade.** When `JUST_UPGRADED` fires, gstack now offers to enable new features once per user (per-feature marker files at `~/.gstack/.feature-prompted-{name}`). Skipped entirely in spawned sessions (OpenClaw orchestrator). No more silent features that never get discovered.
-- **Context health soft directive (T2+ skills).** During long-running skills (/qa, /investigate, /cso), gstack now nudges you to write periodic `[PROGRESS]` summaries. Self-monitoring during 50+ tool-call sessions. No fake thresholds — soft directive that the model self-applies. Progress reporting never mutates git state.
-- **`gstack-model-benchmark` CLI.** Run the same prompt across Claude, GPT, and Gemini, compare latency/tokens/cost/quality. Per-provider auth detection, pricing tables, tool-compatibility map, parallel execution, per-provider error isolation. Quality scoring via Anthropic SDK as the stable judge (`--judge` flag). Output as table, JSON, or markdown. The first multi-provider benchmark in any agent framework — every other tool guesses which model is best, gstack measures it.
-- **Design taste engine.** Persistent cross-session taste profile at `~/.gstack/projects/$SLUG/taste-profile.json`. Tracks fonts, colors, layouts, and aesthetic directions you approve and reject across sessions. Confidence decays 5% per week. Design-consultation and design-shotgun now factor in your demonstrated preferences. Schema migration handles legacy approved.json. New `gstack-taste-update` CLI updates the profile after design-shotgun decisions.
-- **Anti-slop design constraints.** Design-consultation now asks "What's the one thing someone will remember?" as a forcing question. Phase 5 self-gate: "Would a human designer be embarrassed by this?" — discards and regenerates if yes. Anti-convergence directive in design-shotgun: each variant must use a different font, palette, and layout, or one of them failed. Space Grotesk added to the overused fonts list (it's the new "safe alternative to Inter" trap). system-ui-as-primary-font added to the AI slop blacklist.
-- **`gstack-config list` and `gstack-config defaults`** subcommands. `list` shows all config keys with their current value AND source (set/default). `defaults` shows just the defaults table. Fixes the prior gap where `get` returned empty for missing keys instead of falling back to the documented defaults. Telemetry default aligned: header and runtime both say `off` now (previously mismatched).
-- **`gstack-config checkpoint_mode` and `checkpoint_push` keys.** New config knobs for continuous checkpoint mode. Both default to safe values (`explicit` mode, no auto-push).
-- **New `/benchmark-models` skill.** Wraps `gstack-model-benchmark` in an interactive flow: pick a prompt (an existing SKILL.md, inline text, or file path), confirm providers (dry-run shows auth status per provider), decide on `--judge` (adds ~$0.05 for quality scoring), run, interpret. Trigger phrases: "compare models", "model shootout", "which model is best". Separate from `/benchmark` (which measures web page performance) — different surface, different domain.
-- **`gstack-model-benchmark --dry-run`.** Offline validation mode. Validates the provider list, resolves per-adapter auth, echoes the resolved flag values, and exits without invoking any provider CLI. Zero-cost pre-flight for CI pipelines and for catching auth drift before starting a paid benchmark run.
+#### Design skills that stop looking like AI
+
+- **Anti-slop design constraints.** `/design-consultation` now asks "What's the one thing someone will remember?" as a forcing question in Phase 1, and runs a "Would a human designer be embarrassed by this?" self-gate in Phase 5 — output that fails the gate gets discarded and regenerated. `/design-shotgun` gets an anti-convergence directive: each variant must use a different font, palette, and layout, or one of them failed. Space Grotesk (the new "safe alternative to Inter") added to the overused-fonts list. `system-ui` as a primary font added to the AI-slop blacklist.
+- **Design taste engine.** Your approvals and rejections in `/design-shotgun` get written to a persistent per-project taste profile at `~/.gstack/projects/$SLUG/taste-profile.json`. Tracks fonts, colors, layouts, and aesthetic directions with Laplace-smoothed confidence. Decays 5% per week so stale preferences fade. `/design-consultation` and `/design-shotgun` both factor in your demonstrated preferences on future runs, so variant #3 this month remembers what you liked in variant #1 last month.
+
+#### Session state that survives a crash
+
+- **Continuous checkpoint mode (opt-in, local by default).** Flip it on with `gstack-config set checkpoint_mode continuous` and skills auto-commit your work with `WIP: <description>` prefix and a structured `[gstack-context]` body (decisions made, remaining work, failed approaches). Close your laptop mid-refactor and your state survives. Push is opt-in via `checkpoint_push=true`, default is local-only so you don't accidentally trigger CI on every WIP commit.
+- **`/context-restore` reads WIP commits.** In addition to the markdown saved-context files, `/context-restore` now parses `[gstack-context]` blocks from WIP commits on the current branch. Your next session starts with the exact state you left, not a stale notes file.
+- **`/ship` non-destructively squashes WIP commits** before creating the PR. Uses `git rebase --autosquash` scoped to WIP commits only. Non-WIP commits on the branch are preserved. Aborts on conflict with a `BLOCKED` status instead of destroying real work. So you can go wild with `WIP:` commits all week and still ship a clean bisectable PR.
+
+#### Quality-of-life
+
+- **Feature discovery prompt after upgrade.** When `JUST_UPGRADED` fires, gstack offers to enable new features once per user (per-feature marker files at `~/.gstack/.feature-prompted-{name}`). Skipped entirely in spawned sessions. No more silent features that never get discovered.
+- **Context health soft directive (T2+ skills).** During long-running skills (`/qa`, `/investigate`, `/cso`), gstack now nudges you to write periodic `[PROGRESS]` summaries. If you notice you're going in circles, STOP and reassess. Self-monitoring for 50+ tool-call sessions. No fake thresholds, no enforcement. Progress reports never mutate git state.
+
+#### Cross-host support
+
+- **Per-model behavioral overlays via `--model` flag.** Different LLMs need different nudges. Run `bun run gen:skill-docs --model gpt-5.4` and every generated skill picks up GPT-tuned behavioral patches. Five overlays ship in `model-overlays/`: claude (todo-list discipline), gpt (anti-termination + completeness), gpt-5.4 (anti-verbosity, inherits gpt), gemini (conciseness), o-series (structured output). Overlay files are plain markdown — edit in place, no code changes. `MODEL_OVERLAY: {model}` prints in the preamble output so you know which one is active.
+
+#### Config
+
+- **`gstack-config list` and `defaults`** subcommands. `list` shows all config keys with current value AND source (user-set vs default). `defaults` shows the defaults table. Fixes the prior gap where `get` returned empty for missing keys instead of falling back to the documented defaults.
+- **`checkpoint_mode` and `checkpoint_push` config keys.** New knobs for continuous checkpoint mode. Both default to safe values (`explicit` mode, no auto-push).
+
+#### Power-user / internal
+
+- **`gstack-model-benchmark` CLI + `/benchmark-models` skill.** Run the same prompt across Claude, GPT (via Codex CLI), and Gemini side-by-side. Compares latency, tokens, cost, and optionally output quality via an Anthropic SDK judge (`--judge`, ~$0.05/run). Per-provider auth detection, pricing tables, tool-compatibility map, parallel execution, per-provider error isolation. Output as table / JSON / markdown. `--dry-run` validates flags + auth without spending API calls. `/benchmark-models` wraps the CLI in an interactive flow (pick prompt → confirm providers → decide on judge → run → interpret) for when you want to know "which model is actually best for my `/qa` skill" with data instead of vibes.
 
 ### Changed
 
