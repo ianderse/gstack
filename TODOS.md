@@ -198,17 +198,149 @@ calibration gate is trustworthy.
 
 ## Sidebar Security
 
-### ML Prompt Injection Classifier
+### ML Prompt Injection Classifier — v1 SHIPPED (branch garrytan/prompt-injection-guard)
 
-**What:** Add DeBERTa-v3-base-prompt-injection-v2 via @huggingface/transformers v4 (WASM backend) as an ML defense layer for the Chrome sidebar. Reusable `browse/src/security.ts` module with `checkInjection()` API. Includes canary tokens, attack logging, shield icon, special telemetry (AskUserQuestion on detection even when telemetry off), and BrowseSafe-bench red team test harness (3,680 adversarial cases from Perplexity).
+**Status:** IN PROGRESS on branch `garrytan/prompt-injection-guard`. Classifier swap:
+**TestSavantAI** replaces DeBERTa (better on developer content — HN/Reddit/Wikipedia/tech blogs all
+score SAFE 0.98+, attacks score INJECTION 0.99+). Pre-impl gate 3 (benign corpus dry-run)
+forced this pivot — see `~/.gstack/projects/garrytan-gstack/ceo-plans/2026-04-19-prompt-injection-guard.md`.
 
-**Why:** PR 1 fixes the architecture (command allowlist, XML framing, Opus default). But attackers can still trick Claude into navigating to phishing sites or exfiltrating visible page data via allowed browse commands. The ML classifier catches prompt injection patterns that architectural controls can't see. 94.8% accuracy, 99.6% recall, ~50-100ms inference via WASM. Defense-in-depth.
+**What shipped in v1:**
+- `browse/src/security.ts` — canary injection + check, verdict combiner (ensemble rule),
+  attack log with rotation, cross-process session state, status reporting
+- `browse/src/security-classifier.ts` — TestSavantAI ONNX classifier + Haiku transcript
+  classifier (reasoning-blind), both with graceful degradation
+- Canary flows end-to-end: server.ts injects, sidebar-agent.ts checks every outbound
+  channel (text, tool args, URLs, file writes) and kills session on leak
+- Pre-spawn ML scan of user message with ensemble rule (BLOCK requires both classifiers)
+- `/health` endpoint exposes security status for shield icon
+- 25 unit tests + 12 regression tests all passing
 
-**Context:** Full design doc with industry research, open source tool landscape, Codex review findings, and ambitious Bun-native vision (5ms inference via FFI + Apple Accelerate): [`docs/designs/ML_PROMPT_INJECTION_KILLER.md`](docs/designs/ML_PROMPT_INJECTION_KILLER.md). CEO plan with scope decisions: `~/.gstack/projects/garrytan-gstack/ceo-plans/2026-03-28-sidebar-prompt-injection-defense.md`.
+**Branch 2 architecture (decided from pre-impl gate 1):**
+The ML classifier ONLY runs in `sidebar-agent.ts` (non-compiled bun script). The compiled
+browse binary cannot link onnxruntime-node. Architectural controls (XML framing + allowlist)
+defend the compiled-side ingress.
 
-**Effort:** L (human: ~2 weeks / CC: ~3-4 hours)
+### ML Prompt Injection Classifier — v2 Follow-ups
+
+#### Shield icon + canary leak banner UI (P0)
+
+**What:** Render the security state in the sidepanel: shield icon (green/yellow/red) in the
+header, and the approved canary leak banner when the agent emits `security_event` (variant A
+mockup at `~/.gstack/projects/garrytan-gstack/designs/prompt-injection-canary-banner-20260419/variant-A.png`).
+
+**Why:** The backend plumbing landed in v1 (`/health` returns security status; agent emits
+security_event). Without the UI, the user never sees when the layer fires. Trust UX is
+load-bearing here.
+
+**Context:** Design spec in ceo-plan §"Design Review Additions 2026-04-19". Need to edit
+`extension/sidepanel.html` + `sidepanel.js` + `sidepanel.css`. Respect DESIGN.md tokens
+(amber #F59E0B primary, zinc neutrals, Satoshi/DM Sans/JetBrains Mono).
+
+**Effort:** M (human: ~1d / CC: ~2h)
 **Priority:** P0
-**Depends on:** Sidebar security fix PR (command allowlist + XML framing + arg fix) landing first
+**Depends on:** v1 shipped on `garrytan/prompt-injection-guard`
+
+#### Attack telemetry via gstack-telemetry-log (P1)
+
+**What:** Extend `~/.claude/skills/gstack/bin/gstack-telemetry-log` with an `attack_attempt`
+event type. New flags: `--event-type attack_attempt --url-domain --payload-hash
+--confidence --layer --verdict`. Existing `community`/`anonymous`/`off` tier gating
+applies automatically.
+
+**Why:** Local `~/.gstack/security/attempts.jsonl` is write-only. Piggybacking on existing
+telemetry pipe (gstack-telemetry-log → community-pulse edge function → Supabase) means NO
+new SDK, NO new auth, NO new migration. Closes the "attacks in the wild" feedback loop.
+
+**Context:** See ceo-plan §"E6 Telemetry Write Path — RESOLVED". Client POSTs the new
+event type; community-pulse edge function stores in a generic `analytics_events.payload jsonb`
+column. Typed `security_attempts` table + dashboard is a separate follow-up.
+
+**Effort:** S (human: ~1d / CC: ~1h)
+**Priority:** P1
+
+#### Full BrowseSafe-Bench at gate tier (P2)
+
+**What:** Promote `browse/test/security-bench.test.ts` from smoke-200 (gate) to full-3680
+(gate) once smoke/full detection rate correlation is measured (~2 weeks post-ship).
+
+**Why:** BrowseSafe-Bench is Perplexity's 3,680-case browser-agent injection benchmark.
+Smoke-200 is a sample; full coverage catches the long tail. Run time ~5min hermetic.
+
+**Effort:** S (CC: ~45min)
+**Priority:** P2
+**Depends on:** v1 shipped + ~2 weeks real data
+
+#### Cross-user aggregate attack dashboard at gstack.gg/dashboard/security (P2)
+
+**What:** Read path + UI for the attack_attempt telemetry that arrives at Supabase from
+E6. Queries: per-domain hit counts, layer distribution, FP candidates (WARN that users
+dismissed vs BLOCK that terminated).
+
+**Why:** Turns every gstack user into a sensor. We see what's being tried in the wild,
+prioritize fixes based on real prevalence.
+
+**Effort:** L (human: ~2w / CC: ~4h)
+**Priority:** P2
+**Depends on:** Attack telemetry follow-up landed
+
+#### TestSavantAI ensemble → consider adding DeBERTa-v3 as third signal (P2)
+
+**What:** Add ProtectAI DeBERTa-v3-base-prompt-injection-v2 ONNX as a third classifier. Run
+in parallel with TestSavantAI and Haiku. Ensemble vote = BLOCK only if 2-of-3 agree.
+
+**Why:** Defense-in-depth per Perplexity/HiddenLayer/Anthropic consensus. TestSavantAI alone
+handled the benign corpus well but industry guidance still says no single classifier is
+sufficient. DeBERTa is 170MB / ~5ms native. Revisit after attack-log data tells us what
+TestSavantAI misses.
+
+**Effort:** M (human: ~1w / CC: ~2h)
+**Priority:** P2
+**Depends on:** Attack telemetry data from v1
+
+#### Read/Glob/Grep tool-output injection coverage (P2)
+
+**What:** Scan content entering Claude's context via Read, Glob, Grep tools in addition to
+browse commands. Codex flagged this in CEO review: "untrusted repo content read via
+Read/Glob/Grep enters Claude's context."
+
+**Why:** The sidebar agent has access to Read/Glob/Grep tools. If a project has a file
+with injected instructions, Claude reads it and acts on it — the content-security.ts
+envelope wrapping doesn't fire on non-browse-output paths.
+
+**Effort:** M (human: ~1w / CC: ~2h)
+**Priority:** P2
+
+#### Adversarial + integration + smoke-bench test suites (P1)
+
+**What:**
+- `browse/test/security-adversarial.test.ts`: base64-decoded injection, URL-encoded,
+  zero-width character, unicode homoglyph evasion patterns
+- `browse/test/security-integration.test.ts`: 4 isolated fixtures + 1 combined, asserts
+  each content-security.ts and security.ts layer fires independently (E5 from ceo-plan)
+- `browse/test/security-bench.test.ts`: BrowseSafe-Bench smoke-200 hermetic harness
+- `browse/test/security-benign-corpus.test.ts`: 50 real-page HTML fixtures, assert 0% FP
+  at BLOCK threshold (calibration gate)
+
+**Why:** v1 shipped with unit tests only. The adversarial and integration suites are the
+"defense-in-depth contract" pin that the CEO review identified as critical.
+
+**Effort:** M (human: ~3d / CC: ~2h)
+**Priority:** P1
+**Depends on:** v1 shipped
+
+#### Bun-native 5ms DeBERTa inference (P3 research)
+
+**What:** Port the DeBERTa tokenizer + ONNX inference to pure Bun/TypeScript using Bun's
+native SIMD, or use Bun FFI + Apple Accelerate for matmul. Target: ~5ms inference, works
+in compiled Bun binary (solves the onnxruntime-node limitation).
+
+**Why:** Only worth it once we scan every tool output, not just user input + snapshots.
+See design doc §"The Ambitious Vision" — this would make gstack the only open source tool
+with native-speed prompt injection detection in a compiled binary.
+
+**Effort:** XL (human: ~2mo / CC: ~1-2w)
+**Priority:** P3 / research
 
 ## Builder Ethos
 
